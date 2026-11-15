@@ -1,0 +1,33 @@
+# Build outputs & binaries
+/descent
+/descent.bin
+/build/
+/bin/
+*.exe
+*.out
+*.app
+*.so
+*.dylib
+*.dll
+
+# Debug symbols & artifacts
+*.o
+*.obj
+*.pdb
+*.ilk
+*.dSYM/
+
+# Profiling & crash dumps
+*.spall
+*.tracy
+core
+vgcore.*
+
+# Editor & OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
