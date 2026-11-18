@@ -16,6 +16,7 @@
 *.pdb
 *.ilk
 *.dSYM/
+libraylib.so.620
 
 # Profiling & crash dumps
 *.spall
