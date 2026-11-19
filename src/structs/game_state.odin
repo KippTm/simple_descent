@@ -13,6 +13,11 @@ Spatial_Grid :: struct {
 
 // Root Game State allocated on the heap so stack size stays tiny.
 Game_State :: struct {
+	current_state:    State_Kind,
+	menu_selection:   int,
+	pause_selection:  int,
+	should_quit:      bool,
+
 	player:           Player,
 
 	// Structure of Arrays (#soa) for cache-friendly iteration over hot loops
@@ -27,6 +32,7 @@ Game_State :: struct {
 	// Loop & Teleporter progression
 	run_timer:        f32,
 	stage:            int,
+	wave:             int,
 	kill_count:       int,
 	kill_quota:       int,
 	spawn_timer:      f32,

@@ -11,10 +11,28 @@ MAX_ENEMIES     :: 16384
 MAX_PROJECTILES :: 4096
 MAX_ABILITIES   :: 6
 
+// Melee Sweep & Dash Configuration
+MELEE_RANGE            :: 68.0
+MELEE_HALF_ANGLE       :: 0.85 // ~48 degrees half-angle (~97 degree total swing arc)
+MELEE_SWING_VISUAL_DUR :: 0.16
+PLAYER_IFRAME_DURATION :: 0.55
+DASH_DURATION          :: 0.15
+DASH_SPEED             :: 760.0
+
 // Spatial Hash Grid Configuration
 // Using a power-of-two bucket count allows fast bitwise modulo (& (GRID_BUCKETS - 1))
 GRID_CELL_SIZE :: 32.0
 GRID_BUCKETS   :: 4096
+
+// -----------------------------------------------------------------------------
+// State Machine Types
+// -----------------------------------------------------------------------------
+
+State_Kind :: enum u8 {
+	Menu,
+	Playing,
+	Paused,
+}
 
 // -----------------------------------------------------------------------------
 // Data-Driven Combat & Specialization Types

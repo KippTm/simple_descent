@@ -18,10 +18,10 @@ spawn_enemy :: proc(state: ^structs.Game_State, pos: [2]f32, kind: structs.Enemy
 	state.enemies[idx] = structs.Enemy {
 		pos          = pos,
 		vel          = {0, 0},
-		hp           = 30.0,
-		max_hp       = 30.0,
-		speed        = 95.0 + rand.float32_range(-15.0, 15.0),
-		radius       = 8.0,
+		hp           = 40.0,
+		max_hp       = 40.0,
+		speed        = 92.0 + rand.float32_range(-12.0, 12.0),
+		radius       = 10.0,
 		kind         = kind,
 		status_flags = {},
 	}
@@ -38,6 +38,8 @@ remove_enemy :: #force_inline proc(state: ^structs.Game_State, idx: int) {
 
 update_enemies :: proc(state: ^structs.Game_State, dt: f32) {
 	player_pos := state.player.pos
+	player_rad := state.player.radius
+
 	for i := state.enemy_count - 1; i >= 0; i -= 1 {
 		if state.enemies[i].hp <= 0 {
 			remove_enemy(state, i)
@@ -98,7 +100,25 @@ update_enemies :: proc(state: ^structs.Game_State, dt: f32) {
 		}
 
 		vel := (steer + separation * 1.65) * state.enemies[i].speed * speed_mult
+		new_pos := e_pos + vel * dt
+
+		// Player contact damage & collision response
+		hit_diff := player_pos - new_pos
+		hit_dist_sq := linalg.length2(hit_diff)
+		contact_dist := player_rad + e_rad
+		if hit_dist_sq <= contact_dist * contact_dist {
+			if state.player.invuln_timer <= 0 {
+				state.player.hp = max(0, state.player.hp - 12.0)
+				state.player.invuln_timer = structs.PLAYER_IFRAME_DURATION
+			}
+			if hit_dist_sq > 0.0001 {
+				hit_dist := math.sqrt(hit_dist_sq)
+				push_out := (hit_diff / hit_dist) * (contact_dist - hit_dist + 4.0)
+				new_pos -= push_out
+			}
+		}
+
 		state.enemies[i].vel = vel
-		state.enemies[i].pos = e_pos + vel * dt
+		state.enemies[i].pos = new_pos
 	}
 }

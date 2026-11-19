@@ -33,12 +33,17 @@ Projectile :: struct {
 }
 
 Player :: struct {
-	pos:           [2]f32,
-	vel:           [2]f32,
-	hp:            f32,
-	max_hp:        f32,
-	speed:         f32,
-	radius:        f32,
-	abilities:     [MAX_ABILITIES]Ability,
-	ability_count: int,
+	pos:               [2]f32,
+	vel:               [2]f32,
+	hp:                f32,
+	max_hp:            f32,
+	speed:             f32,
+	radius:            f32,
+	invuln_timer:      f32,
+	melee_swing_timer: f32,
+	melee_swing_dir:   [2]f32,
+	dash_timer:        f32,
+	dash_dir:          [2]f32,
+	abilities:         [MAX_ABILITIES]Ability,
+	ability_count:     int,
 }

@@ -13,6 +13,8 @@ main :: proc() {
 	rl.InitWindow(structs.WINDOW_WIDTH, structs.WINDOW_HEIGHT, "Project Descent")
 	defer rl.CloseWindow()
 	rl.SetTargetFPS(60)
+	// Prevent ESC from immediately closing the window so we can use it to pause
+	rl.SetExitKey(.KEY_NULL)
 
 	// Allocate Game_State on the heap so the large fixed pools don't overflow the stack
 	state := new(structs.Game_State)
@@ -20,7 +22,7 @@ main :: proc() {
 
 	states.init_game(state)
 
-	for !rl.WindowShouldClose() {
+	for !rl.WindowShouldClose() && !state.should_quit {
 		dt := min(rl.GetFrameTime(), 0.05)
 
 		camera := rl.Camera2D {
@@ -29,7 +31,7 @@ main :: proc() {
 			zoom   = 1.0,
 		}
 
-		states.update_game(state, dt, camera)
+		states.update_state_machine(state, dt, camera)
 		render.render_game(state, camera)
 
 		// Reset temporary allocator at the end of every frame

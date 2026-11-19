@@ -1,6 +1,7 @@
 package entities
 
 import "core:math"
+import "core:math/linalg"
 import "../structs"
 
 // -----------------------------------------------------------------------------
@@ -69,5 +70,58 @@ apply_ability_hit :: proc(state: ^structs.Game_State, ability_slot: int, enemy_i
 		state.player.hp = min(state.player.max_hp, state.player.hp + heal)
 	case .Storm:
 		state.enemies[enemy_idx].hp -= 4.0 * spec_scale
+	}
+}
+
+// Short-ranged melee arc attack (Terraria starting sword feel)
+perform_melee_sweep :: proc(state: ^structs.Game_State, dir: [2]f32, ability_slot: int) {
+	ability := state.player.abilities[ability_slot]
+	level_mult := 1.0 + 0.15 * f32(ability.level - 1)
+	damage := 14.0 * level_mult
+	range := f32(structs.MELEE_RANGE)
+	cos_threshold := math.cos(f32(structs.MELEE_HALF_ANGLE))
+
+	p_pos := state.player.pos
+	cx, cy := world_to_cell(p_pos)
+	cell_rad := i32(math.ceil((range + 16.0) / structs.GRID_CELL_SIZE))
+
+	// Query spatial hash neighborhood covering the sword arc
+	for dy in -cell_rad ..= cell_rad {
+		for dx in -cell_rad ..= cell_rad {
+			bucket := hash_cell(cx + dx, cy + dy)
+			e_idx := state.grid.cell_head[bucket]
+			for e_idx != -1 {
+				e_pos := state.enemies[e_idx].pos
+				e_rad := state.enemies[e_idx].radius
+				to_enemy := e_pos - p_pos
+				dist_sq := linalg.length2(to_enemy)
+				max_reach := range + e_rad
+
+				if dist_sq <= max_reach * max_reach {
+					hit := false
+					if dist_sq < 0.001 {
+						hit = true
+					} else {
+						dist := math.sqrt(dist_sq)
+						to_enemy_dir := to_enemy / dist
+						// Allow slightly wider angle when overlapping directly with player body
+						if linalg.dot(dir, to_enemy_dir) >= cos_threshold || dist <= state.player.radius + e_rad + 6.0 {
+							hit = true
+						}
+					}
+
+					if hit {
+						apply_ability_hit(state, ability_slot, int(e_idx), damage)
+						// Apply crisp knockback away from player so sword hits feel tactile
+						if dist_sq > 0.001 {
+							push_dir := to_enemy / math.sqrt(dist_sq)
+							state.enemies[e_idx].pos += push_dir * 18.0
+						}
+					}
+				}
+
+				e_idx = state.grid.next_in_cell[e_idx]
+			}
+		}
 	}
 }
