@@ -110,7 +110,7 @@ update_player :: proc(state: ^structs.Game_State, dt: f32, camera: rl.Camera2D) 
 	}
 	state.player.pos += state.player.vel * dt
 
-	// 2. Manual Ability Activation via Keys "1", "2", "3"
+	// 2. Mouse / Trackpad Aiming ONLY
 	mouse_world := rl.GetScreenToWorld2D(rl.GetMousePosition(), camera)
 	to_mouse := [2]f32{mouse_world.x, mouse_world.y} - state.player.pos
 	aim_dir := [2]f32{1, 0}
@@ -118,6 +118,7 @@ update_player :: proc(state: ^structs.Game_State, dt: f32, camera: rl.Camera2D) 
 		aim_dir = linalg.normalize(to_mouse)
 	}
 
+	// 3. Manual Ability Activation via Keys "1", "2", "3"
 	if rl.IsKeyPressed(.ONE) || rl.IsKeyPressed(.KP_1) {
 		trigger_ability(state, 0, aim_dir, move_input)
 	}

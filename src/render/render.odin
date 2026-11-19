@@ -271,13 +271,6 @@ render_skill_bar :: proc(player: ^structs.Player) {
 		// Slot background
 		rl.DrawRectangle(sx, sy, slot_size, slot_size, {24, 26, 36, 255})
 
-		// Cooldown fill overlay
-		if ability.cooldown_time > 0 && ability.cooldown > 0 {
-			cd_ratio := clamp(ability.cooldown / ability.cooldown_time, 0.0, 1.0)
-			cd_h := i32(f32(slot_size) * cd_ratio)
-			rl.DrawRectangle(sx, sy + (slot_size - cd_h), slot_size, cd_h, {10, 10, 16, 170})
-		}
-
 		// Draw distinct ability vector icon in slot center
 		draw_ability_icon(ability.kind, sx + slot_size / 2, sy + slot_size / 2 - 4, accent)
 
@@ -293,6 +286,16 @@ render_skill_bar :: proc(player: ^structs.Player) {
 			xp_h,
 			accent,
 		)
+
+		// Slightly gray cooldown overlay drawn ON TOP of the ability icon,
+		// starting full and slowly moving down as cooldown expires
+		if ability.cooldown_time > 0 && ability.cooldown > 0 {
+			cd_ratio := clamp(ability.cooldown / ability.cooldown_time, 0.0, 1.0)
+			cd_h := i32(f32(slot_size) * cd_ratio)
+			overlay_y := sy + (slot_size - cd_h)
+			rl.DrawRectangle(sx, overlay_y, slot_size, cd_h, {130, 138, 155, 150})
+			rl.DrawLine(sx, overlay_y, sx + slot_size, overlay_y, {210, 220, 235, 210})
+		}
 
 		// Slot border colored by specialization
 		rl.DrawRectangleLines(sx, sy, slot_size, slot_size, accent)
