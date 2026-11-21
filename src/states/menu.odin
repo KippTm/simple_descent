@@ -19,9 +19,8 @@ update_menu :: proc(state: ^structs.Game_State) {
 
 	if rl.IsKeyPressed(.ENTER) || rl.IsKeyPressed(.SPACE) {
 		switch state.menu_selection {
-		case 0: // Start Run
-			reset_run(state)
-			change_state(state, .Playing)
+		case 0: // Start Run -> Loadout Selection
+			change_state(state, .Loadout_Select)
 		case 1: // Quit
 			state.should_quit = true
 		}

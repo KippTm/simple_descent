@@ -3,7 +3,8 @@ package render
 import "core:fmt"
 import "core:math"
 import rl "vendor:raylib"
-import "../entities"
+import "../abilities"
+import "../states"
 import "../structs"
 
 // -----------------------------------------------------------------------------
@@ -19,6 +20,8 @@ render_game :: proc(state: ^structs.Game_State, camera: rl.Camera2D) {
 	switch state.current_state {
 	case .Menu:
 		render_menu(state)
+	case .Loadout_Select:
+		render_loadout_select(state)
 	case .Playing:
 		render_world(state, camera)
 		render_hud(state)
@@ -92,18 +95,18 @@ render_player :: proc(player: ^structs.Player) {
 	p_pos := player.pos
 	p_rad := player.radius
 
-	// Render Terraria-style broadsword arc & blade during melee swing
+	// Render Sweep arc & blade during melee swing
 	if player.melee_swing_timer > 0 {
 		progress := 1.0 - (player.melee_swing_timer / structs.MELEE_SWING_VISUAL_DUR)
 		center_deg := math.atan2(player.melee_swing_dir.y, player.melee_swing_dir.x) * (180.0 / math.PI)
-		half_deg := f32(structs.MELEE_HALF_ANGLE) * (180.0 / math.PI)
+		half_deg := player.melee_swing_half_angle * (180.0 / math.PI)
 		start_deg := center_deg - half_deg
 		end_deg := center_deg + half_deg
+		swing_range := player.melee_swing_range
 
-		// Translucent slash sector
 		rl.DrawCircleSector(
 			{p_pos.x, p_pos.y},
-			structs.MELEE_RANGE,
+			swing_range,
 			start_deg,
 			end_deg,
 			16,
@@ -111,25 +114,52 @@ render_player :: proc(player: ^structs.Player) {
 		)
 		rl.DrawCircleSectorLines(
 			{p_pos.x, p_pos.y},
-			structs.MELEE_RANGE,
+			swing_range,
 			start_deg,
 			end_deg,
 			16,
 			{255, 225, 150, 180},
 		)
 
-		// Sweeping sword blade line
 		blade_deg := start_deg + (end_deg - start_deg) * progress
 		blade_rad := blade_deg * (math.PI / 180.0)
 		tip := [2]f32{
-			p_pos.x + math.cos(blade_rad) * structs.MELEE_RANGE,
-			p_pos.y + math.sin(blade_rad) * structs.MELEE_RANGE,
+			p_pos.x + math.cos(blade_rad) * swing_range,
+			p_pos.y + math.sin(blade_rad) * swing_range,
 		}
 		hilt := [2]f32{
 			p_pos.x + math.cos(blade_rad) * (p_rad + 2.0),
 			p_pos.y + math.sin(blade_rad) * (p_rad + 2.0),
 		}
 		rl.DrawLineEx({hilt.x, hilt.y}, {tip.x, tip.y}, 4.0, {245, 245, 255, 255})
+	}
+
+	// Render Stab deep thrust visual
+	if player.stab_visual_timer > 0 {
+		alpha := u8(clamp((player.stab_visual_timer / structs.STAB_VISUAL_DUR) * 255.0, 0.0, 255.0))
+		start := p_pos + player.stab_dir * (p_rad + 2.0)
+		tip := p_pos + player.stab_dir * player.stab_range
+		rl.DrawLineEx({start.x, start.y}, {tip.x, tip.y}, 7.0, {220, 235, 255, alpha / 2})
+		rl.DrawLineEx({start.x, start.y}, {tip.x, tip.y}, 3.0, {255, 255, 255, alpha})
+		rl.DrawCircleV({tip.x, tip.y}, 4.0, {255, 245, 200, alpha})
+	}
+
+	// Render Haste speed aura
+	if player.haste_timer > 0 {
+		rl.DrawCircleLinesV({p_pos.x, p_pos.y}, p_rad + 5.0, {255, 230, 95, 190})
+	}
+
+	// Render Mana Shield bubble
+	if player.shield_timer > 0 && player.shield_hp > 0 {
+		rl.DrawCircleV({p_pos.x, p_pos.y}, p_rad + 9.0, {75, 185, 255, 65})
+		rl.DrawCircleLinesV({p_pos.x, p_pos.y}, p_rad + 9.0, {120, 220, 255, 230})
+	}
+
+	// Render Reflect parry ring
+	if player.reflect_timer > 0 {
+		rl.DrawCircleV({p_pos.x, p_pos.y}, p_rad + 12.0, {255, 245, 170, 55})
+		rl.DrawCircleLinesV({p_pos.x, p_pos.y}, p_rad + 12.0, {255, 245, 170, 255})
+		rl.DrawCircleLinesV({p_pos.x, p_pos.y}, p_rad + 14.0, {255, 255, 255, 220})
 	}
 
 	// Flash player slightly during invulnerability frames
@@ -188,14 +218,50 @@ render_hud :: proc(state: ^structs.Game_State) {
 	hp_text_w := rl.MeasureText(hp_text, 14)
 	rl.DrawText(hp_text, hp_bar_x + (hp_bar_w - hp_text_w) / 2, hp_bar_y + 3, 14, rl.RAYWHITE)
 
+	// Optional Mana Shield indicator bar right beneath HP bar when active
+	if state.player.shield_timer > 0 && state.player.shield_hp > 0 {
+		sh_y := hp_bar_y + hp_bar_h + 6
+		sh_ratio := clamp(state.player.shield_hp / max(state.player.shield_max_hp, 1.0), 0.0, 1.0)
+		rl.DrawRectangle(hp_bar_x - 1, sh_y - 1, hp_bar_w + 2, 10, {12, 12, 18, 220})
+		rl.DrawRectangle(hp_bar_x, sh_y, i32(f32(hp_bar_w) * sh_ratio), 8, {90, 200, 255, 255})
+	}
+
 	// Bottom Skill Bar Menu (Icons + Level + XP progress + Spec badge)
 	render_skill_bar(&state.player)
+}
+
+category_color :: proc(cat: structs.Ability_Category) -> rl.Color {
+	switch cat {
+	case .None:
+		return {130, 135, 155, 255}
+	case .Physical:
+		return {235, 145, 75, 255}
+	case .Magical:
+		return {100, 185, 255, 255}
+	case .Utility:
+		return {115, 230, 155, 255}
+	}
+	return {130, 135, 155, 255}
+}
+
+category_label :: proc(cat: structs.Ability_Category) -> cstring {
+	switch cat {
+	case .None:
+		return ""
+	case .Physical:
+		return "PHYSICAL"
+	case .Magical:
+		return "MAGICAL"
+	case .Utility:
+		return "UTILITY"
+	}
+	return ""
 }
 
 spec_accent_color :: proc(spec: structs.Spec_Type) -> rl.Color {
 	switch spec {
 	case .None:
-		return {130, 135, 155, 255}
+		return {145, 155, 175, 255}
 	case .Blood:
 		return {225, 55, 75, 255}
 	case .Ice:
@@ -205,24 +271,44 @@ spec_accent_color :: proc(spec: structs.Spec_Type) -> rl.Color {
 	case .Storm:
 		return {195, 120, 255, 255}
 	}
-	return {130, 135, 155, 255}
+	return {145, 155, 175, 255}
 }
 
-draw_ability_icon :: proc(kind: structs.Ability_Kind, cx, cy: i32, accent: rl.Color) {
-	switch kind {
+draw_ability_icon :: proc(id: structs.Ability_Id, cx, cy: i32, accent: rl.Color) {
+	switch id {
 	case .None:
-	case .Melee_Sweep:
+	case .Sweep:
 		// Diagonal Broadsword icon
 		rl.DrawLineEx({f32(cx - 10), f32(cy + 10)}, {f32(cx + 11), f32(cy - 11)}, 4.0, rl.RAYWHITE)
 		rl.DrawLineEx({f32(cx - 11), f32(cy + 3)}, {f32(cx - 3), f32(cy + 11)}, 3.0, accent)
 		rl.DrawCircle(cx - 12, cy + 12, 2.5, accent)
-	case .Targeted_Projectile:
+	case .Stab:
+		// Sharp forward spear / lance thrust
+		rl.DrawLineEx({f32(cx - 13), f32(cy + 4)}, {f32(cx + 10), f32(cy - 4)}, 3.0, rl.RAYWHITE)
+		rl.DrawTriangle(
+			{f32(cx + 14), f32(cy - 5)},
+			{f32(cx + 4), f32(cy - 8)},
+			{f32(cx + 6), f32(cy + 1)},
+			accent,
+		)
+	case .Reflect:
+		// Reflective parry arc & bounce arrow
+		rl.DrawCircleLines(cx, cy, 11.0, accent)
+		rl.DrawLineEx({f32(cx - 7), f32(cy + 5)}, {f32(cx), f32(cy - 2)}, 2.5, rl.RAYWHITE)
+		rl.DrawLineEx({f32(cx), f32(cy - 2)}, {f32(cx + 8), f32(cy - 8)}, 2.5, accent)
+		rl.DrawCircle(cx + 8, cy - 8, 2.5, accent)
+	case .Mana_Bolt:
 		// Magic bolt / orb with trail
 		rl.DrawLineEx({f32(cx - 11), f32(cy + 8)}, {f32(cx + 4), f32(cy - 4)}, 3.0, accent)
 		rl.DrawCircle(cx + 6, cy - 6, 6.0, accent)
 		rl.DrawCircle(cx + 6, cy - 6, 3.0, rl.RAYWHITE)
-	case .Defensive_Dash:
-		// Winged boot / dash chevrons
+	case .Mana_Shield:
+		// Translucent barrier dome
+		rl.DrawCircle(cx, cy, 11.0, {accent.r, accent.g, accent.b, 85})
+		rl.DrawCircleLines(cx, cy, 11.0, accent)
+		rl.DrawCircleLines(cx, cy, 7.0, rl.RAYWHITE)
+	case .Dash:
+		// Dash triangle + speed trails
 		rl.DrawTriangle(
 			{f32(cx + 11), f32(cy)},
 			{f32(cx - 3), f32(cy - 9)},
@@ -232,6 +318,12 @@ draw_ability_icon :: proc(kind: structs.Ability_Kind, cx, cy: i32, accent: rl.Co
 		rl.DrawLineEx({f32(cx - 12), f32(cy - 5)}, {f32(cx - 5), f32(cy - 5)}, 2.5, rl.RAYWHITE)
 		rl.DrawLineEx({f32(cx - 14), f32(cy)}, {f32(cx - 5), f32(cy)}, 2.5, rl.RAYWHITE)
 		rl.DrawLineEx({f32(cx - 12), f32(cy + 5)}, {f32(cx - 5), f32(cy + 5)}, 2.5, rl.RAYWHITE)
+	case .Haste:
+		// Double forward speed chevrons
+		rl.DrawLineEx({f32(cx - 9), f32(cy - 9)}, {f32(cx - 1), f32(cy)}, 3.0, rl.RAYWHITE)
+		rl.DrawLineEx({f32(cx - 1), f32(cy)}, {f32(cx - 9), f32(cy + 9)}, 3.0, rl.RAYWHITE)
+		rl.DrawLineEx({f32(cx + 1), f32(cy - 9)}, {f32(cx + 9), f32(cy)}, 3.0, accent)
+		rl.DrawLineEx({f32(cx + 9), f32(cy)}, {f32(cx + 1), f32(cy + 9)}, 3.0, accent)
 	}
 }
 
@@ -264,18 +356,19 @@ render_skill_bar :: proc(player: ^structs.Player) {
 
 	for i in 0 ..< count {
 		ability := player.abilities[i]
+		def := abilities.ABILITY_DEFS[ability.id]
 		sx := start_x + i32(i) * (slot_size + slot_gap)
 		sy := bar_y
-		accent := spec_accent_color(ability.spec_type)
+		accent := spec_accent_color(ability.spec_type) if ability.spec_type != .None else category_color(def.category)
 
 		// Slot background
 		rl.DrawRectangle(sx, sy, slot_size, slot_size, {24, 26, 36, 255})
 
 		// Draw distinct ability vector icon in slot center
-		draw_ability_icon(ability.kind, sx + slot_size / 2, sy + slot_size / 2 - 4, accent)
+		draw_ability_icon(ability.id, sx + slot_size / 2, sy + slot_size / 2 - 4, accent)
 
 		// XP progress bar at bottom of the slot
-		xp_req := entities.xp_for_next_level(ability.level)
+		xp_req := abilities.xp_for_next_level(ability.level)
 		xp_ratio := clamp(ability.xp / max(xp_req, 1.0), 0.0, 1.0)
 		xp_h: i32 = 5
 		rl.DrawRectangle(sx + 2, sy + slot_size - xp_h - 2, slot_size - 4, xp_h, {15, 16, 22, 255})
@@ -287,8 +380,7 @@ render_skill_bar :: proc(player: ^structs.Player) {
 			accent,
 		)
 
-		// Slightly gray cooldown overlay drawn ON TOP of the ability icon,
-		// starting full and slowly moving down as cooldown expires
+		// Slightly gray cooldown overlay drawn ON TOP of the ability icon
 		if ability.cooldown_time > 0 && ability.cooldown > 0 {
 			cd_ratio := clamp(ability.cooldown / ability.cooldown_time, 0.0, 1.0)
 			cd_h := i32(f32(slot_size) * cd_ratio)
@@ -297,7 +389,7 @@ render_skill_bar :: proc(player: ^structs.Player) {
 			rl.DrawLine(sx, overlay_y, sx + slot_size, overlay_y, {210, 220, 235, 210})
 		}
 
-		// Slot border colored by specialization
+		// Slot border colored by specialization (or category while unspecialized)
 		rl.DrawRectangleLines(sx, sy, slot_size, slot_size, accent)
 
 		// Level badge at bottom-right
@@ -337,6 +429,112 @@ render_menu :: proc(state: ^structs.Game_State) {
 		structs.WINDOW_HEIGHT - 48,
 		18,
 		{130, 135, 150, 255},
+	)
+}
+
+render_loadout_select :: proc(state: ^structs.Game_State) {
+	render_world_grid({f32(structs.WINDOW_WIDTH) * 0.5, f32(structs.WINDOW_HEIGHT) * 0.5})
+
+	draw_centered_text("CHOOSE YOUR STARTING 3 ABILITIES", 32, 34, {80, 235, 145, 255})
+	draw_centered_text(
+		fmt.ctprintf("Selected: %d / %d  (All abilities start unspecialized)", state.selected_loadout_count, structs.STARTING_ABILITY_COUNT),
+		76,
+		18,
+		{165, 175, 195, 255},
+	)
+
+	// Top 3 Loadout Preview Slots
+	slot_w: i32 = 240
+	slot_h: i32 = 84
+	slot_gap: i32 = 24
+	slots_total_w := i32(structs.STARTING_ABILITY_COUNT) * slot_w + i32(structs.STARTING_ABILITY_COUNT - 1) * slot_gap
+	slots_start_x := (structs.WINDOW_WIDTH - slots_total_w) / 2
+	slots_y: i32 = 118
+
+	for i in 0 ..< structs.STARTING_ABILITY_COUNT {
+		sx := slots_start_x + i32(i) * (slot_w + slot_gap)
+		id := state.selected_loadout[i] if i < state.selected_loadout_count else .None
+
+		rl.DrawRectangle(sx, slots_y, slot_w, slot_h, {22, 24, 34, 240})
+		if id != .None {
+			def := abilities.ABILITY_DEFS[id]
+			accent := category_color(def.category)
+			rl.DrawRectangleLines(sx, slots_y, slot_w, slot_h, accent)
+			draw_ability_icon(id, sx + 36, slots_y + slot_h / 2, accent)
+			rl.DrawText(fmt.ctprintf("[%d] %s", i + 1, def.name), sx + 68, slots_y + 18, 20, rl.RAYWHITE)
+			rl.DrawText(category_label(def.category), sx + 68, slots_y + 46, 13, accent)
+		} else {
+			rl.DrawRectangleLines(sx, slots_y, slot_w, slot_h, {70, 75, 95, 255})
+			rl.DrawText(fmt.ctprintf("[%d] Empty Slot", i + 1), sx + 20, slots_y + 32, 18, {110, 115, 135, 255})
+		}
+	}
+
+	// Roster Cards Grid (all 7 selectable abilities)
+	for i in 0 ..< len(abilities.SELECTABLE_ABILITIES) {
+		id := abilities.SELECTABLE_ABILITIES[i]
+		def := abilities.ABILITY_DEFS[id]
+		rect := states.loadout_card_rect(i)
+		accent := category_color(def.category)
+		is_cursor := state.loadout_cursor == i
+
+		// Check if this ability is currently in the player's 3-slot loadout
+		selected_slot := -1
+		for s in 0 ..< state.selected_loadout_count {
+			if state.selected_loadout[s] == id {
+				selected_slot = s
+				break
+			}
+		}
+
+		bg := rl.Color{32, 38, 52, 245} if selected_slot >= 0 else rl.Color{22, 24, 34, 235}
+		rl.DrawRectangleRec(rect, bg)
+
+		border := rl.Color{255, 230, 110, 255} if is_cursor else (accent if selected_slot >= 0 else rl.Color{60, 66, 85, 255})
+		border_thick: f32 = 3.0 if is_cursor else (2.0 if selected_slot >= 0 else 1.0)
+		rl.DrawRectangleLinesEx(rect, border_thick, border)
+
+		rx := i32(rect.x)
+		ry := i32(rect.y)
+		draw_ability_icon(id, rx + 30, ry + 34, accent)
+
+		rl.DrawText(def.name, rx + 58, ry + 14, 20, rl.RAYWHITE)
+		rl.DrawText(fmt.ctprintf("%s  |  CD %.2fs", category_label(def.category), def.cooldown_time), rx + 58, ry + 38, 12, accent)
+		rl.DrawText(def.short_desc, rx + 14, ry + 70, 12, {185, 192, 210, 255})
+
+		if selected_slot >= 0 {
+			badge := fmt.ctprintf("SLOT %d", selected_slot + 1)
+			bw := rl.MeasureText(badge, 12)
+			bx := rx + i32(rect.width) - bw - 16
+			by := ry + 10
+			rl.DrawRectangle(bx - 4, by - 2, bw + 8, 16, accent)
+			rl.DrawText(badge, bx, by, 12, {15, 16, 22, 255})
+		}
+	}
+
+	// Start Run Button
+	ready := state.selected_loadout_count == structs.STARTING_ABILITY_COUNT
+	btn := states.loadout_start_btn_rect()
+	btn_bg := rl.Color{55, 185, 115, 255} if ready else rl.Color{45, 48, 60, 255}
+	btn_border := rl.Color{130, 255, 180, 255} if ready else rl.Color{80, 85, 100, 255}
+	btn_text_col := rl.Color{12, 18, 16, 255} if ready else rl.Color{130, 135, 150, 255}
+
+	rl.DrawRectangleRec(btn, btn_bg)
+	rl.DrawRectangleLinesEx(btn, 2.0, btn_border)
+	btn_label: cstring = "START RUN" if ready else "PICK 3 ABILITIES"
+	btn_tw := rl.MeasureText(btn_label, 22)
+	rl.DrawText(
+		btn_label,
+		i32(btn.x) + (i32(btn.width) - btn_tw) / 2,
+		i32(btn.y) + 13,
+		22,
+		btn_text_col,
+	)
+
+	draw_centered_text(
+		"WASD / Arrows = Move | SPACE / Click = Toggle | BACKSPACE = Remove | ENTER = Start | ESC = Back",
+		structs.WINDOW_HEIGHT - 40,
+		16,
+		{140, 145, 165, 255},
 	)
 }
 

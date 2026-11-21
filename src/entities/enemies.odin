@@ -3,6 +3,7 @@ package entities
 import "core:math"
 import "core:math/linalg"
 import "core:math/rand"
+import "../abilities"
 import "../structs"
 
 // -----------------------------------------------------------------------------
@@ -76,14 +77,14 @@ update_enemies :: proc(state: ^structs.Game_State, dt: f32) {
 
 		// Query 3x3 neighborhood in spatial hash for soft separation
 		separation: [2]f32
-		cx, cy := world_to_cell(e_pos)
+		cx, cy := structs.world_to_cell(e_pos)
 		e_rad := state.enemies[i].radius
 		sep_diam := e_rad * 2.0
 		sep_diam_sq := sep_diam * sep_diam
 
 		for dy in i32(-1) ..= 1 {
 			for dx in i32(-1) ..= 1 {
-				bucket := hash_cell(cx + dx, cy + dy)
+				bucket := structs.hash_cell(cx + dx, cy + dy)
 				other := state.grid.cell_head[bucket]
 				for other != -1 {
 					if int(other) != i {
@@ -107,8 +108,15 @@ update_enemies :: proc(state: ^structs.Game_State, dt: f32) {
 		hit_dist_sq := linalg.length2(hit_diff)
 		contact_dist := player_rad + e_rad
 		if hit_dist_sq <= contact_dist * contact_dist {
-			if state.player.invuln_timer <= 0 {
-				state.player.hp = max(0, state.player.hp - 12.0)
+			if state.player.reflect_timer > 0 {
+				state.enemies[i].pos = new_pos
+				abilities.on_player_reflect_hit(state, i, 12.0)
+				new_pos = state.enemies[i].pos
+			} else if state.player.invuln_timer <= 0 {
+				remaining_dmg := abilities.absorb_with_mana_shield(state, 12.0)
+				if remaining_dmg > 0 {
+					state.player.hp = max(0, state.player.hp - remaining_dmg)
+				}
 				state.player.invuln_timer = structs.PLAYER_IFRAME_DURATION
 			}
 			if hit_dist_sq > 0.0001 {

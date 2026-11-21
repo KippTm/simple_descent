@@ -2,74 +2,39 @@ package entities
 
 import "core:math/linalg"
 import rl "vendor:raylib"
+import "../abilities"
 import "../structs"
 
 // -----------------------------------------------------------------------------
 // Player Initialization & Controls
 // -----------------------------------------------------------------------------
 
-init_player :: proc(player: ^structs.Player) {
+init_player :: proc(
+	player: ^structs.Player,
+	loadout: [structs.STARTING_ABILITY_COUNT]structs.Ability_Id = abilities.DEFAULT_LOADOUT,
+) {
 	player^ = structs.Player {
-		pos             = {0, 0},
-		hp              = 100,
-		max_hp          = 100,
-		speed           = 220,
-		radius          = 10,
-		melee_swing_dir = {1, 0},
-		dash_dir        = {1, 0},
-		ability_count   = 3,
+		pos                    = {0, 0},
+		hp                     = 100,
+		max_hp                 = 100,
+		speed                  = 220,
+		radius                 = 10,
+		melee_swing_dir        = {1, 0},
+		melee_swing_range      = structs.MELEE_RANGE,
+		melee_swing_half_angle = structs.MELEE_HALF_ANGLE,
+		stab_dir               = {1, 0},
+		dash_dir               = {1, 0},
+		dash_speed             = structs.DASH_SPEED,
+		haste_mult             = 1.0,
+		ability_count          = structs.STARTING_ABILITY_COUNT,
 	}
 
-	// 3 Starting Abilities (spec 2.1) — triggered manually via keys "1", "2", "3"
-	// Slot 0 (Key 1): Slightly ranged melee swing (Terraria broadsword length)
-	player.abilities[0] = structs.Ability {
-		kind          = .Melee_Sweep,
-		level         = 1,
-		spec_type     = .Fire,
-		spec_tier     = 1,
-		cooldown_time = 0.42,
-	}
-	// Slot 1 (Key 2): Targeted Projectile
-	player.abilities[1] = structs.Ability {
-		kind          = .Targeted_Projectile,
-		level         = 1,
-		spec_type     = .Ice,
-		spec_tier     = 1,
-		cooldown_time = 0.85,
-	}
-	// Slot 2 (Key 3): Defensive Dash
-	player.abilities[2] = structs.Ability {
-		kind          = .Defensive_Dash,
-		level         = 1,
-		spec_type     = .None,
-		spec_tier     = 0,
-		cooldown_time = 2.0,
-	}
-}
-
-trigger_ability :: proc(state: ^structs.Game_State, slot: int, aim_dir, move_input: [2]f32) {
-	if slot < 0 || slot >= state.player.ability_count do return
-
-	ability := &state.player.abilities[slot]
-	if ability.cooldown > 0 || ability.kind == .None do return
-
-	ability.cooldown = ability.cooldown_time
-
-	switch ability.kind {
-	case .None:
-	case .Melee_Sweep:
-		state.player.melee_swing_dir = aim_dir
-		state.player.melee_swing_timer = structs.MELEE_SWING_VISUAL_DUR
-		perform_melee_sweep(state, aim_dir, slot)
-	case .Targeted_Projectile:
-		spawn_projectile(state, state.player.pos, aim_dir, slot)
-	case .Defensive_Dash:
-		dash_dir := move_input if linalg.length2(move_input) > 0.001 else aim_dir
-		state.player.dash_dir = dash_dir
-		state.player.dash_timer = structs.DASH_DURATION
-		state.player.invuln_timer = max(state.player.invuln_timer, structs.DASH_DURATION + 0.15)
-		// Award muscle-memory XP on executing dash
-		grant_ability_xp(ability, 3.0)
+	for i in 0 ..< structs.STARTING_ABILITY_COUNT {
+		id := loadout[i]
+		if id == .None {
+			id = abilities.DEFAULT_LOADOUT[i]
+		}
+		player.abilities[i] = abilities.make_ability(id)
 	}
 }
 
@@ -80,8 +45,26 @@ update_player :: proc(state: ^structs.Game_State, dt: f32, camera: rl.Camera2D) 
 	if state.player.melee_swing_timer > 0 {
 		state.player.melee_swing_timer = max(0, state.player.melee_swing_timer - dt)
 	}
+	if state.player.stab_visual_timer > 0 {
+		state.player.stab_visual_timer = max(0, state.player.stab_visual_timer - dt)
+	}
+	if state.player.reflect_timer > 0 {
+		state.player.reflect_timer = max(0, state.player.reflect_timer - dt)
+	}
+	if state.player.shield_timer > 0 {
+		state.player.shield_timer = max(0, state.player.shield_timer - dt)
+		if state.player.shield_timer <= 0 {
+			state.player.shield_hp = 0
+		}
+	}
 	if state.player.dash_timer > 0 {
 		state.player.dash_timer = max(0, state.player.dash_timer - dt)
+	}
+	if state.player.haste_timer > 0 {
+		state.player.haste_timer = max(0, state.player.haste_timer - dt)
+		if state.player.haste_timer <= 0 {
+			state.player.haste_mult = 1.0
+		}
 	}
 
 	// Tick ability cooldowns
@@ -91,7 +74,7 @@ update_player :: proc(state: ^structs.Game_State, dt: f32, camera: rl.Camera2D) 
 		}
 	}
 
-	// 1. Player Movement (WASD / Arrow Keys, or Dash burst if active)
+	// 1. Player Movement (WASD / Arrow Keys, Haste boost, or Dash burst if active)
 	move_input: [2]f32
 	if rl.IsKeyDown(.W) || rl.IsKeyDown(.UP)    do move_input.y -= 1
 	if rl.IsKeyDown(.S) || rl.IsKeyDown(.DOWN)  do move_input.y += 1
@@ -103,10 +86,10 @@ update_player :: proc(state: ^structs.Game_State, dt: f32, camera: rl.Camera2D) 
 	}
 
 	if state.player.dash_timer > 0 {
-		dash_mult := 1.0 + 0.05 * f32(state.player.abilities[2].level - 1)
-		state.player.vel = state.player.dash_dir * (structs.DASH_SPEED * dash_mult)
+		state.player.vel = state.player.dash_dir * state.player.dash_speed
 	} else {
-		state.player.vel = move_input * state.player.speed
+		speed_mult: f32 = state.player.haste_mult if state.player.haste_timer > 0 else 1.0
+		state.player.vel = move_input * (state.player.speed * speed_mult)
 	}
 	state.player.pos += state.player.vel * dt
 
@@ -120,12 +103,12 @@ update_player :: proc(state: ^structs.Game_State, dt: f32, camera: rl.Camera2D) 
 
 	// 3. Manual Ability Activation via Keys "1", "2", "3"
 	if rl.IsKeyPressed(.ONE) || rl.IsKeyPressed(.KP_1) {
-		trigger_ability(state, 0, aim_dir, move_input)
+		abilities.trigger_ability(state, 0, aim_dir, move_input)
 	}
 	if rl.IsKeyPressed(.TWO) || rl.IsKeyPressed(.KP_2) {
-		trigger_ability(state, 1, aim_dir, move_input)
+		abilities.trigger_ability(state, 1, aim_dir, move_input)
 	}
 	if rl.IsKeyPressed(.THREE) || rl.IsKeyPressed(.KP_3) {
-		trigger_ability(state, 2, aim_dir, move_input)
+		abilities.trigger_ability(state, 2, aim_dir, move_input)
 	}
 }

@@ -1,6 +1,7 @@
 package entities
 
 import "core:math/linalg"
+import "../abilities"
 import "../structs"
 
 // -----------------------------------------------------------------------------
@@ -8,22 +9,9 @@ import "../structs"
 // -----------------------------------------------------------------------------
 
 spawn_projectile :: proc(state: ^structs.Game_State, pos, dir: [2]f32, ability_slot: int) {
-	if state.projectile_count >= structs.MAX_PROJECTILES do return
-
-	idx := state.projectile_count
-	state.projectile_count += 1
-
 	ability := state.player.abilities[ability_slot]
 	level_mult := 1.0 + 0.12 * f32(ability.level - 1)
-
-	state.projectiles[idx] = structs.Projectile {
-		pos          = pos,
-		vel          = dir * 520.0,
-		radius       = 4.0,
-		damage       = 15.0 * level_mult,
-		lifetime     = 1.75,
-		ability_slot = ability_slot,
-	}
+	abilities.spawn_bolt_projectile(state, pos, dir, 520.0, 4.0, 15.0 * level_mult, 1.75, ability_slot)
 }
 
 remove_projectile :: #force_inline proc(state: ^structs.Game_State, idx: int) {
@@ -46,13 +34,13 @@ update_projectiles :: proc(state: ^structs.Game_State, dt: f32) {
 
 		p_pos := state.projectiles[i].pos
 		p_rad := state.projectiles[i].radius
-		cx, cy := world_to_cell(p_pos)
+		cx, cy := structs.world_to_cell(p_pos)
 		hit := false
 
 		// Check 3x3 neighboring cells around projectile
 		cell_search: for dy in i32(-1) ..= 1 {
 			for dx in i32(-1) ..= 1 {
-				bucket := hash_cell(cx + dx, cy + dy)
+				bucket := structs.hash_cell(cx + dx, cy + dy)
 				e_idx := state.grid.cell_head[bucket]
 				for e_idx != -1 {
 					e_pos := state.enemies[e_idx].pos
@@ -60,7 +48,7 @@ update_projectiles :: proc(state: ^structs.Game_State, dt: f32) {
 					diff := p_pos - e_pos
 					min_dist := p_rad + e_rad
 					if linalg.length2(diff) <= min_dist * min_dist {
-						apply_ability_hit(state, state.projectiles[i].ability_slot, int(e_idx), state.projectiles[i].damage)
+						abilities.apply_ability_hit(state, state.projectiles[i].ability_slot, int(e_idx), state.projectiles[i].damage)
 						hit = true
 						break cell_search
 					}

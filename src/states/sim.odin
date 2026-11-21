@@ -11,6 +11,7 @@ import "../structs"
 // -----------------------------------------------------------------------------
 
 init_game :: proc(state: ^structs.Game_State) {
+	init_default_loadout(state)
 	reset_run(state)
 	change_state(state, .Menu)
 }
@@ -41,7 +42,7 @@ reset_run :: proc(state: ^structs.Game_State) {
 	state.enemy_count = 0
 	state.projectile_count = 0
 
-	entities.init_player(&state.player)
+	entities.init_player(&state.player, state.selected_loadout)
 
 	spawn_wave(state)
 }

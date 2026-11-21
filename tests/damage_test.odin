@@ -3,6 +3,7 @@ package tests
 import "core:math"
 import "core:math/linalg"
 import "core:testing"
+import "../src/abilities"
 import "../src/entities"
 import "../src/structs"
 
@@ -20,7 +21,7 @@ test_enemy_enemy_collision_deals_no_damage :: proc(t: ^testing.T) {
 	// Keep the player far away so only enemy-to-enemy collision/separation occurs
 	state.player.pos = {0, 0}
 
-	// Spawn two enemies overlapping right next to each other
+	// Spawn three enemies overlapping right next to each other
 	entities.spawn_enemy(state, {400, 0}, .Basic_Chaser)
 	entities.spawn_enemy(state, {402, 0}, .Basic_Chaser)
 	entities.spawn_enemy(state, {401, 2}, .Basic_Chaser)
@@ -53,12 +54,15 @@ test_projectile_damages_only_hit_enemy :: proc(t: ^testing.T) {
 
 	state.player.pos = {0, 0}
 
+	// Explicitly specialize slot 1 (Mana_Bolt) to Ice to verify on-hit spec application
+	abilities.grant_specialization(&state.player.abilities[1], .Ice, 1)
+
 	// Enemy 0 directly in projectile path, Enemy 1 nearby but off-path
 	entities.spawn_enemy(state, {20, 0}, .Basic_Chaser)
 	entities.spawn_enemy(state, {20, 40}, .Basic_Chaser)
 
-	// Slot 1 is Targeted_Projectile (level 1 -> 15.0 base damage, Ice spec)
-	entities.spawn_projectile(state, {0, 0}, {1, 0}, 1)
+	// Trigger slot 1 (Mana_Bolt, level 1 -> 15.0 base damage)
+	abilities.trigger_ability(state, 1, {1, 0}, {0, 0})
 	testing.expect_value(t, state.projectile_count, 1)
 
 	entities.grid_rebuild(state)
@@ -77,6 +81,9 @@ test_melee_sweep_damages_enemies_in_arc_only :: proc(t: ^testing.T) {
 
 	state.player.pos = {0, 0}
 
+	// Explicitly specialize slot 0 (Sweep) to Fire to verify on-hit Burn application
+	abilities.grant_specialization(&state.player.abilities[0], .Fire, 1)
+
 	// Enemy 0: in front within melee arc
 	entities.spawn_enemy(state, {35, 0}, .Basic_Chaser)
 	// Enemy 1: behind player (outside arc and outside body overlap)
@@ -85,11 +92,11 @@ test_melee_sweep_damages_enemies_in_arc_only :: proc(t: ^testing.T) {
 	entities.spawn_enemy(state, {200, 0}, .Basic_Chaser)
 
 	entities.grid_rebuild(state)
-	// Slot 0 is Melee_Sweep (level 1 -> 14.0 base damage, Fire spec)
-	entities.perform_melee_sweep(state, {1, 0}, 0)
+	// Slot 0 is Sweep (level 1 -> 14.0 base damage)
+	abilities.trigger_ability(state, 0, {1, 0}, {0, 0})
 
 	testing.expect_value(t, state.enemies[0].hp, f32(26.0))
-	testing.expect(t, .Burn in state.enemies[0].status_flags, "Expected Fire melee sweep to apply Burn")
+	testing.expect(t, .Burn in state.enemies[0].status_flags, "Expected Fire sweep to apply Burn")
 
 	testing.expect_value(t, state.enemies[1].hp, state.enemies[1].max_hp)
 	testing.expect(t, !(.Burn in state.enemies[1].status_flags), "Enemy behind player should not burn")
