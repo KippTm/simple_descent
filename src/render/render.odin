@@ -91,7 +91,24 @@ render_projectiles :: proc(state: ^structs.Game_State) {
 	for i in 0 ..< state.projectile_count {
 		pos := state.projectiles[i].pos
 		rad := state.projectiles[i].radius
-		rl.DrawCircleV({pos.x, pos.y}, rad, rl.RAYWHITE)
+		vel := state.projectiles[i].vel
+		switch state.projectiles[i].kind {
+		case .Bolt:
+			rl.DrawCircleV({pos.x, pos.y}, rad, rl.RAYWHITE)
+		case .Returning_Knife:
+			angle := math.atan2(vel.y, vel.x)
+			dir := [2]f32{math.cos(angle), math.sin(angle)}
+			tail := pos - dir * 9.0
+			tip := pos + dir * 9.0
+			rl.DrawLineEx({tail.x, tail.y}, {tip.x, tip.y}, 3.5, {235, 240, 255, 255})
+			rl.DrawCircleV({tip.x, tip.y}, 2.5, {255, 195, 95, 255})
+		case .Mana_Orb:
+			aura := state.projectiles[i].aura_radius
+			rl.DrawCircleV({pos.x, pos.y}, aura, {110, 170, 255, 32})
+			rl.DrawCircleLinesV({pos.x, pos.y}, aura, {130, 195, 255, 140})
+			rl.DrawCircleV({pos.x, pos.y}, rad, {150, 220, 255, 255})
+			rl.DrawCircleV({pos.x, pos.y}, rad * 0.5, rl.RAYWHITE)
+		}
 	}
 }
 
@@ -146,6 +163,29 @@ render_player :: proc(player: ^structs.Player) {
 		rl.DrawLineEx({start.x, start.y}, {tip.x, tip.y}, 7.0, {220, 235, 255, alpha / 2})
 		rl.DrawLineEx({start.x, start.y}, {tip.x, tip.y}, 3.0, {255, 255, 255, alpha})
 		rl.DrawCircleV({tip.x, tip.y}, 4.0, {255, 245, 200, alpha})
+	}
+
+	// Render Lunge frontal strike visual
+	if player.lunge_timer > 0 {
+		start := p_pos + player.lunge_dir * (p_rad + 2.0)
+		tip := p_pos + player.lunge_dir * player.lunge_range
+		rl.DrawLineEx({start.x, start.y}, {tip.x, tip.y}, 10.0, {255, 175, 95, 120})
+		rl.DrawCircleV({tip.x, tip.y}, 7.0, {255, 220, 145, 200})
+	}
+
+	// Render Mana Nova expanding 360-degree ring
+	if player.nova_visual_timer > 0 {
+		progress := 1.0 - (player.nova_visual_timer / structs.NOVA_VISUAL_DUR)
+		alpha := u8(clamp((1.0 - progress) * 230.0, 0.0, 230.0))
+		cur_rad := player.nova_visual_radius * (0.25 + 0.75 * progress)
+		rl.DrawCircleV({player.nova_visual_pos.x, player.nova_visual_pos.y}, cur_rad, {115, 180, 255, alpha / 4})
+		rl.DrawCircleLinesV({player.nova_visual_pos.x, player.nova_visual_pos.y}, cur_rad, {160, 220, 255, alpha})
+		rl.DrawCircleLinesV({player.nova_visual_pos.x, player.nova_visual_pos.y}, max(cur_rad - 3.0, 1.0), {235, 245, 255, alpha})
+	}
+
+	// Render Mend healing aura
+	if player.mend_timer > 0 {
+		rl.DrawCircleLinesV({p_pos.x, p_pos.y}, p_rad + 7.0, {95, 245, 145, 180})
 	}
 
 	// Render Haste speed aura
@@ -301,6 +341,20 @@ draw_ability_icon :: proc(id: structs.Ability_Id, cx, cy: i32, accent: rl.Color)
 		rl.DrawLineEx({f32(cx - 7), f32(cy + 5)}, {f32(cx), f32(cy - 2)}, 2.5, rl.RAYWHITE)
 		rl.DrawLineEx({f32(cx), f32(cy - 2)}, {f32(cx + 8), f32(cy - 8)}, 2.5, accent)
 		rl.DrawCircle(cx + 8, cy - 8, 2.5, accent)
+	case .Knife_Throw:
+		// Returning curved dagger + arc trail
+		rl.DrawLineEx({f32(cx - 10), f32(cy + 6)}, {f32(cx + 9), f32(cy - 7)}, 3.0, rl.RAYWHITE)
+		rl.DrawCircleLines(cx, cy + 2, 11.0, {accent.r, accent.g, accent.b, 140})
+		rl.DrawCircle(cx + 9, cy - 7, 2.5, accent)
+	case .Lunge:
+		// Short burst arrow with impact spark
+		rl.DrawLineEx({f32(cx - 12), f32(cy)}, {f32(cx + 6), f32(cy)}, 3.5, rl.RAYWHITE)
+		rl.DrawTriangle(
+			{f32(cx + 13), f32(cy)},
+			{f32(cx + 3), f32(cy - 7)},
+			{f32(cx + 3), f32(cy + 7)},
+			accent,
+		)
 	case .Mana_Bolt:
 		// Magic bolt / orb with trail
 		rl.DrawLineEx({f32(cx - 11), f32(cy + 8)}, {f32(cx + 4), f32(cy - 4)}, 3.0, accent)
@@ -311,6 +365,19 @@ draw_ability_icon :: proc(id: structs.Ability_Id, cx, cy: i32, accent: rl.Color)
 		rl.DrawCircle(cx, cy, 11.0, {accent.r, accent.g, accent.b, 85})
 		rl.DrawCircleLines(cx, cy, 11.0, accent)
 		rl.DrawCircleLines(cx, cy, 7.0, rl.RAYWHITE)
+	case .Mana_Nova:
+		// Expanding concentric blast rings
+		rl.DrawCircleLines(cx, cy, 12.0, accent)
+		rl.DrawCircleLines(cx, cy, 7.0, rl.RAYWHITE)
+		rl.DrawCircle(cx, cy, 3.0, accent)
+	case .Mana_Orb:
+		// Three floating orbs in a triad
+		rl.DrawCircle(cx, cy - 8, 4.0, accent)
+		rl.DrawCircle(cx - 8, cy + 6, 4.0, accent)
+		rl.DrawCircle(cx + 8, cy + 6, 4.0, accent)
+		rl.DrawCircle(cx, cy - 8, 1.8, rl.RAYWHITE)
+		rl.DrawCircle(cx - 8, cy + 6, 1.8, rl.RAYWHITE)
+		rl.DrawCircle(cx + 8, cy + 6, 1.8, rl.RAYWHITE)
 	case .Dash:
 		// Dash triangle + speed trails
 		rl.DrawTriangle(
@@ -328,6 +395,12 @@ draw_ability_icon :: proc(id: structs.Ability_Id, cx, cy: i32, accent: rl.Color)
 		rl.DrawLineEx({f32(cx - 1), f32(cy)}, {f32(cx - 9), f32(cy + 9)}, 3.0, rl.RAYWHITE)
 		rl.DrawLineEx({f32(cx + 1), f32(cy - 9)}, {f32(cx + 9), f32(cy)}, 3.0, accent)
 		rl.DrawLineEx({f32(cx + 9), f32(cy)}, {f32(cx + 1), f32(cy + 9)}, 3.0, accent)
+	case .Mend:
+		// Healing cross
+		rl.DrawRectangle(cx - 3, cy - 10, 6, 20, accent)
+		rl.DrawRectangle(cx - 10, cy - 3, 20, 6, accent)
+		rl.DrawRectangle(cx - 1, cy - 7, 2, 14, rl.RAYWHITE)
+		rl.DrawRectangle(cx - 7, cy - 1, 14, 2, rl.RAYWHITE)
 	}
 }
 
@@ -445,19 +518,27 @@ upgrade_focus_desc :: proc(id: structs.Ability_Id, f: structs.Upgrade_Focus) -> 
 	case .Damage:
 		if id == .Mana_Shield do return "+15% shield absorb HP"
 		if id == .Reflect do return "+15% reflected damage"
+		if id == .Mend do return "+15% heal per second"
 		return "+15% ability damage"
 	case .Range:
 		if id == .Dash do return "+10% dash speed & reach"
+		if id == .Lunge do return "+12% lunge distance & reach"
 		if id == .Haste do return "+8% movement speed"
 		if id == .Mana_Bolt do return "+15% range & +8% speed"
+		if id == .Knife_Throw do return "+15% throw distance"
+		if id == .Mana_Nova do return "+14% blast radius & force"
+		if id == .Mana_Orb do return "+15% orb damage radius"
 		return "+12% attack reach"
 	case .Duration:
 		if id == .Reflect do return "+0.04s parry window"
 		if id == .Mana_Shield do return "+0.45s shield duration"
 		if id == .Dash do return "+0.03s invulnerability"
 		if id == .Haste do return "+0.50s haste duration"
+		if id == .Mend do return "+0.75s heal duration"
 		return "Longer effect duration"
 	case .Projectiles:
+		if id == .Mana_Orb do return "+1 extra mana orb"
+		if id == .Knife_Throw do return "+1 extra returning knife"
 		return "+1 extra projectile"
 	}
 	return ""
@@ -545,21 +626,21 @@ render_menu :: proc(state: ^structs.Game_State) {
 render_loadout_select :: proc(state: ^structs.Game_State) {
 	render_world_grid({f32(structs.WINDOW_WIDTH) * 0.5, f32(structs.WINDOW_HEIGHT) * 0.5})
 
-	draw_centered_text("CHOOSE YOUR STARTING 3 ABILITIES", 32, 34, {80, 235, 145, 255})
+	draw_centered_text("CHOOSE YOUR STARTING 3 ABILITIES", 22, 32, {80, 235, 145, 255})
 	draw_centered_text(
 		fmt.ctprintf("Selected: %d / %d  (All abilities start unspecialized)", state.selected_loadout_count, structs.STARTING_ABILITY_COUNT),
-		76,
-		18,
+		58,
+		16,
 		{165, 175, 195, 255},
 	)
 
 	// Top 3 Loadout Preview Slots
 	slot_w: i32 = 240
-	slot_h: i32 = 84
+	slot_h: i32 = 64
 	slot_gap: i32 = 24
 	slots_total_w := i32(structs.STARTING_ABILITY_COUNT) * slot_w + i32(structs.STARTING_ABILITY_COUNT - 1) * slot_gap
 	slots_start_x := (structs.WINDOW_WIDTH - slots_total_w) / 2
-	slots_y: i32 = 118
+	slots_y: i32 = 90
 
 	for i in 0 ..< structs.STARTING_ABILITY_COUNT {
 		sx := slots_start_x + i32(i) * (slot_w + slot_gap)
@@ -570,54 +651,72 @@ render_loadout_select :: proc(state: ^structs.Game_State) {
 			def := abilities.ABILITY_DEFS[id]
 			accent := category_color(def.category)
 			rl.DrawRectangleLines(sx, slots_y, slot_w, slot_h, accent)
-			draw_ability_icon(id, sx + 36, slots_y + slot_h / 2, accent)
-			rl.DrawText(fmt.ctprintf("[%d] %s", i + 1, def.name), sx + 68, slots_y + 18, 20, rl.RAYWHITE)
-			rl.DrawText(category_label(def.category), sx + 68, slots_y + 46, 13, accent)
+			draw_ability_icon(id, sx + 30, slots_y + slot_h / 2, accent)
+			rl.DrawText(fmt.ctprintf("[%d] %s", i + 1, def.name), sx + 58, slots_y + 12, 18, rl.RAYWHITE)
+			rl.DrawText(category_label(def.category), sx + 58, slots_y + 36, 12, accent)
 		} else {
 			rl.DrawRectangleLines(sx, slots_y, slot_w, slot_h, {70, 75, 95, 255})
-			rl.DrawText(fmt.ctprintf("[%d] Empty Slot", i + 1), sx + 20, slots_y + 32, 18, {110, 115, 135, 255})
+			rl.DrawText(fmt.ctprintf("[%d] Empty Slot", i + 1), sx + 20, slots_y + 23, 17, {110, 115, 135, 255})
 		}
 	}
 
-	// Roster Cards Grid (all 7 selectable abilities)
-	for i in 0 ..< len(abilities.SELECTABLE_ABILITIES) {
-		id := abilities.SELECTABLE_ABILITIES[i]
-		def := abilities.ABILITY_DEFS[id]
-		rect := states.loadout_card_rect(i)
-		accent := category_color(def.category)
-		is_cursor := state.loadout_cursor == i
+	// 3 Separate Category Columns: Physical | Magical | Utility
+	for col in 0 ..< states.LOADOUT_COLS {
+		cat := states.LOADOUT_COL_CATEGORIES[col]
+		cat_col := category_color(cat)
+		header := states.loadout_col_header_rect(col)
+		hx := i32(header.x)
+		hy := i32(header.y)
+		hw := i32(header.width)
+		hh := i32(header.height)
 
-		// Check if this ability is currently in the player's 3-slot loadout
-		selected_slot := -1
-		for s in 0 ..< state.selected_loadout_count {
-			if state.selected_loadout[s] == id {
-				selected_slot = s
-				break
+		// Column Header Bar
+		rl.DrawRectangle(hx, hy, hw, hh, {24, 27, 38, 235})
+		rl.DrawLineEx({header.x, header.y + header.height}, {header.x + header.width, header.y + header.height}, 2.0, cat_col)
+		label := category_label(cat)
+		lw := rl.MeasureText(label, 18)
+		rl.DrawText(label, hx + (hw - lw) / 2, hy + 6, 18, cat_col)
+
+		// Skills listed vertically below this column's header
+		items, count := states.loadout_col_items(col)
+		for row in 0 ..< count {
+			idx := items[row]
+			id := abilities.SELECTABLE_ABILITIES[idx]
+			def := abilities.ABILITY_DEFS[id]
+			rect := states.loadout_card_rect_for_col_row(col, row)
+			is_cursor := state.loadout_cursor == idx
+
+			selected_slot := -1
+			for s in 0 ..< state.selected_loadout_count {
+				if state.selected_loadout[s] == id {
+					selected_slot = s
+					break
+				}
 			}
-		}
 
-		bg := rl.Color{32, 38, 52, 245} if selected_slot >= 0 else rl.Color{22, 24, 34, 235}
-		rl.DrawRectangleRec(rect, bg)
+			bg := rl.Color{32, 38, 52, 245} if selected_slot >= 0 else rl.Color{22, 24, 34, 235}
+			rl.DrawRectangleRec(rect, bg)
 
-		border := rl.Color{255, 230, 110, 255} if is_cursor else (accent if selected_slot >= 0 else rl.Color{60, 66, 85, 255})
-		border_thick: f32 = 3.0 if is_cursor else (2.0 if selected_slot >= 0 else 1.0)
-		rl.DrawRectangleLinesEx(rect, border_thick, border)
+			border := rl.Color{255, 230, 110, 255} if is_cursor else (cat_col if selected_slot >= 0 else rl.Color{58, 64, 82, 255})
+			border_thick: f32 = 2.5 if is_cursor else (2.0 if selected_slot >= 0 else 1.0)
+			rl.DrawRectangleLinesEx(rect, border_thick, border)
 
-		rx := i32(rect.x)
-		ry := i32(rect.y)
-		draw_ability_icon(id, rx + 30, ry + 34, accent)
+			rx := i32(rect.x)
+			ry := i32(rect.y)
+			draw_ability_icon(id, rx + 26, ry + i32(rect.height) / 2, cat_col)
 
-		rl.DrawText(def.name, rx + 58, ry + 14, 20, rl.RAYWHITE)
-		rl.DrawText(fmt.ctprintf("%s  |  CD %.2fs", category_label(def.category), def.cooldown_time), rx + 58, ry + 38, 12, accent)
-		rl.DrawText(def.short_desc, rx + 14, ry + 70, 12, {185, 192, 210, 255})
+			rl.DrawText(def.name, rx + 52, ry + 8, 17, rl.RAYWHITE)
+			rl.DrawText(fmt.ctprintf("CD %.2fs", def.cooldown_time), rx + 52, ry + 27, 11, cat_col)
+			rl.DrawText(def.short_desc, rx + 52, ry + 42, 11, {180, 188, 206, 255})
 
-		if selected_slot >= 0 {
-			badge := fmt.ctprintf("SLOT %d", selected_slot + 1)
-			bw := rl.MeasureText(badge, 12)
-			bx := rx + i32(rect.width) - bw - 16
-			by := ry + 10
-			rl.DrawRectangle(bx - 4, by - 2, bw + 8, 16, accent)
-			rl.DrawText(badge, bx, by, 12, {15, 16, 22, 255})
+			if selected_slot >= 0 {
+				badge := fmt.ctprintf("SLOT %d", selected_slot + 1)
+				bw := rl.MeasureText(badge, 11)
+				bx := rx + i32(rect.width) - bw - 12
+				by := ry + 8
+				rl.DrawRectangle(bx - 4, by - 2, bw + 8, 15, cat_col)
+				rl.DrawText(badge, bx, by, 11, {15, 16, 22, 255})
+			}
 		}
 	}
 
@@ -635,14 +734,14 @@ render_loadout_select :: proc(state: ^structs.Game_State) {
 	rl.DrawText(
 		btn_label,
 		i32(btn.x) + (i32(btn.width) - btn_tw) / 2,
-		i32(btn.y) + 13,
+		i32(btn.y) + 12,
 		22,
 		btn_text_col,
 	)
 
 	draw_centered_text(
 		"WASD / Arrows = Move | SPACE / Click = Toggle | BACKSPACE = Remove | ENTER = Start | ESC = Back",
-		structs.WINDOW_HEIGHT - 40,
+		structs.WINDOW_HEIGHT - 36,
 		16,
 		{140, 145, 165, 255},
 	)

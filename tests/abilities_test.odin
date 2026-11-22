@@ -8,7 +8,7 @@ import "../src/structs"
 
 @(test)
 test_registry_completeness :: proc(t: ^testing.T) {
-	testing.expect_value(t, len(abilities.SELECTABLE_ABILITIES), 7)
+	testing.expect_value(t, len(abilities.SELECTABLE_ABILITIES), 12)
 
 	for id in abilities.SELECTABLE_ABILITIES {
 		def := abilities.ABILITY_DEFS[id]
@@ -237,4 +237,139 @@ test_dash_and_haste_utility_behavior :: proc(t: ^testing.T) {
 	testing.expect(t, state.player.haste_timer > 0, "Expected Haste timer to activate")
 	testing.expect(t, state.player.haste_mult > 1.0, "Expected Haste to boost speed multiplier")
 	testing.expect(t, state.player.abilities[1].xp > 0, "Expected Haste to gain utility XP on cast")
+}
+
+@(test)
+test_knife_throw_flies_out_and_returns :: proc(t: ^testing.T) {
+	state := new(structs.Game_State)
+	defer free(state)
+
+	entities.init_player(&state.player, {.Knife_Throw, .Mana_Bolt, .Dash})
+	state.player.pos = {0, 0}
+
+	entities.spawn_enemy(state, {60, 0}, .Basic_Chaser)
+	abilities.trigger_ability(state, 0, {1, 0}, {0, 0})
+	testing.expect_value(t, state.projectile_count, 1)
+	testing.expect_value(t, state.projectiles[0].kind, structs.Projectile_Kind.Returning_Knife)
+
+	// Step outward flight until knife flips to returning and hits enemy along the way
+	dt: f32 = 1.0 / 60.0
+	flipped := false
+	for _ in 0 ..< 40 {
+		entities.grid_rebuild(state)
+		entities.update_projectiles(state, dt)
+		if state.projectile_count > 0 && state.projectiles[0].returning {
+			flipped = true
+			break
+		}
+	}
+	testing.expect(t, flipped, "Expected knife to switch to returning phase")
+	testing.expect(t, state.enemies[0].hp < state.enemies[0].max_hp, "Expected knife to damage enemy on outward pass")
+
+	// Continue stepping until knife returns and is caught by the player
+	for _ in 0 ..< 60 {
+		if state.projectile_count == 0 do break
+		entities.grid_rebuild(state)
+		entities.update_projectiles(state, dt)
+	}
+	testing.expect_value(t, state.projectile_count, 0)
+}
+
+@(test)
+test_lunge_shorter_than_dash_and_stab :: proc(t: ^testing.T) {
+	state := new(structs.Game_State)
+	defer free(state)
+
+	entities.init_player(&state.player, {.Lunge, .Stab, .Dash})
+	state.player.pos = {0, 0}
+
+	// Verify Lunge travel distance < Dash travel distance, and Lunge hitbox < Stab range
+	lunge_travel := f32(abilities.LUNGE_SPEED) * f32(abilities.LUNGE_DURATION)
+	dash_travel := f32(structs.DASH_SPEED) * f32(structs.DASH_DURATION)
+	testing.expect(t, lunge_travel < dash_travel, "Expected Lunge range to be shorter than Dash")
+	testing.expect(t, abilities.LUNGE_HITBOX_RANGE < abilities.STAB_RANGE, "Expected Lunge hitbox to be shorter than Stab")
+
+	// Enemy in front within Lunge hitbox (40px) is hit; enemy at 80px (Stab range) is missed
+	entities.spawn_enemy(state, {40, 0}, .Basic_Chaser)
+	entities.spawn_enemy(state, {80, 0}, .Basic_Chaser)
+	entities.grid_rebuild(state)
+
+	abilities.trigger_ability(state, 0, {1, 0}, {0, 0})
+	testing.expect(t, state.player.lunge_timer > 0, "Expected Lunge timer active")
+	testing.expect_value(t, state.enemies[0].hp, f32(24.0)) // 40 - 16
+	testing.expect_value(t, state.enemies[1].hp, state.enemies[1].max_hp)
+}
+
+@(test)
+test_mana_nova_damages_and_pushes_360_ring :: proc(t: ^testing.T) {
+	state := new(structs.Game_State)
+	defer free(state)
+
+	entities.init_player(&state.player, {.Mana_Nova, .Mana_Bolt, .Dash})
+	state.player.pos = {0, 0}
+
+	// 4 enemies on all sides within radius, 1 outside radius
+	entities.spawn_enemy(state, {60, 0}, .Basic_Chaser)
+	entities.spawn_enemy(state, {-60, 0}, .Basic_Chaser)
+	entities.spawn_enemy(state, {0, 60}, .Basic_Chaser)
+	entities.spawn_enemy(state, {0, -60}, .Basic_Chaser)
+	entities.spawn_enemy(state, {220, 0}, .Basic_Chaser)
+
+	entities.grid_rebuild(state)
+	abilities.trigger_ability(state, 0, {1, 0}, {0, 0})
+
+	for i in 0 ..< 4 {
+		testing.expect_value(t, state.enemies[i].hp, f32(16.0)) // 40 - 24
+	}
+	testing.expect(t, state.enemies[0].pos.x > 60.0, "Expected Mana Nova outward knockback")
+	testing.expect_value(t, state.enemies[4].hp, state.enemies[4].max_hp)
+}
+
+@(test)
+test_mana_orb_spawns_three_and_damages_in_range :: proc(t: ^testing.T) {
+	state := new(structs.Game_State)
+	defer free(state)
+
+	entities.init_player(&state.player, {.Mana_Orb, .Mana_Bolt, .Dash})
+	state.player.pos = {0, 0}
+
+	// Enemy inside orb aura range, enemy far away
+	entities.spawn_enemy(state, {35, 0}, .Basic_Chaser)
+	entities.spawn_enemy(state, {300, 0}, .Basic_Chaser)
+
+	abilities.trigger_ability(state, 0, {1, 0}, {0, 0})
+	testing.expect_value(t, state.projectile_count, 3)
+
+	// Step past the initial 0.05s pulse timer so orbs pulse damage
+	entities.grid_rebuild(state)
+	entities.update_projectiles(state, 0.1)
+
+	testing.expect(t, state.enemies[0].hp < state.enemies[0].max_hp, "Expected Mana Orb aura to damage nearby enemy")
+	testing.expect_value(t, state.enemies[1].hp, state.enemies[1].max_hp)
+
+	// Upgrading Projectiles focus spawns extra orbs (3 + 2 = 5)
+	state.projectile_count = 0
+	state.player.abilities[0].cooldown = 0
+	state.player.abilities[0].focus_ranks[.Projectiles] = 2
+	abilities.trigger_ability(state, 0, {1, 0}, {0, 0})
+	testing.expect_value(t, state.projectile_count, 5)
+}
+
+@(test)
+test_mend_heals_slowly_over_time :: proc(t: ^testing.T) {
+	state := new(structs.Game_State)
+	defer free(state)
+
+	entities.init_player(&state.player, {.Mend, .Sweep, .Dash})
+	state.player.hp = 50.0
+
+	abilities.trigger_ability(state, 0, {1, 0}, {0, 0})
+	testing.expect(t, state.player.mend_timer > 0, "Expected Mend timer active")
+	testing.expect(t, state.player.abilities[0].xp > 0, "Expected Mend utility XP on cast")
+
+	// Simulate 1.0s of Mend healing (4.0 HP/s -> 54.0 HP)
+	dt: f32 = 1.0
+	heal_dt := min(dt, state.player.mend_timer)
+	state.player.hp = min(state.player.max_hp, state.player.hp + state.player.mend_hps * heal_dt)
+	testing.expect_value(t, state.player.hp, f32(54.0))
 }

@@ -19,7 +19,8 @@ update_menu :: proc(state: ^structs.Game_State) {
 
 	if rl.IsKeyPressed(.ENTER) || rl.IsKeyPressed(.SPACE) {
 		switch state.menu_selection {
-		case 0: // Start Run -> Loadout Selection
+		case 0: // Start Run -> Loadout Selection (no default loadout)
+			clear_loadout(state)
 			change_state(state, .Loadout_Select)
 		case 1: // Quit
 			state.should_quit = true

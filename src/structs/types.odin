@@ -18,6 +18,7 @@ MELEE_RANGE            :: 68.0
 MELEE_HALF_ANGLE       :: 0.85 // ~48 degrees half-angle (~97 degree total swing arc)
 MELEE_SWING_VISUAL_DUR :: 0.16
 STAB_VISUAL_DUR        :: 0.14
+NOVA_VISUAL_DUR        :: 0.24
 PLAYER_IFRAME_DURATION :: 0.55
 DASH_DURATION          :: 0.15
 DASH_SPEED             :: 760.0
@@ -64,10 +65,15 @@ Ability_Id :: enum u8 {
 	Sweep,
 	Stab,
 	Reflect,
+	Knife_Throw,
+	Lunge,
 	Mana_Bolt,
 	Mana_Shield,
+	Mana_Nova,
+	Mana_Orb,
 	Dash,
 	Haste,
+	Mend,
 }
 
 Ability_Def :: struct {

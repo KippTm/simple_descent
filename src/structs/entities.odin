@@ -22,15 +22,32 @@ Enemy :: struct {
 	burn_timer:            f32,
 	slow_timer:            f32,
 	last_hit_ability_slot: int,
+	last_query_stamp:      u32,
+}
+
+Projectile_Kind :: enum u8 {
+	Bolt,
+	Returning_Knife,
+	Mana_Orb,
 }
 
 Projectile :: struct {
-	pos:          [2]f32,
-	vel:          [2]f32,
-	radius:       f32,
-	damage:       f32,
-	lifetime:     f32,
-	ability_slot: int,
+	kind:           Projectile_Kind,
+	pos:            [2]f32,
+	vel:            [2]f32,
+	radius:         f32,
+	damage:         f32,
+	lifetime:       f32,
+	ability_slot:   int,
+	// Returning knife state
+	returning:      bool,
+	out_timer:      f32,
+	return_speed:   f32,
+	last_hit_enemy: i32,
+	// Mana orb pulsing aura state
+	aura_radius:    f32,
+	pulse_timer:    f32,
+	pulse_interval: f32,
 }
 
 Player :: struct {
@@ -50,6 +67,16 @@ Player :: struct {
 	stab_range:             f32,
 	reflect_timer:          f32,
 	reflect_slot:           int,
+	lunge_timer:            f32,
+	lunge_dir:              [2]f32,
+	lunge_speed:            f32,
+	lunge_damage:           f32,
+	lunge_range:            f32,
+	lunge_slot:             int,
+	lunge_hit_timer:        f32,
+	nova_visual_timer:      f32,
+	nova_visual_pos:        [2]f32,
+	nova_visual_radius:     f32,
 	shield_hp:              f32,
 	shield_max_hp:          f32,
 	shield_timer:           f32,
@@ -59,6 +86,8 @@ Player :: struct {
 	dash_speed:             f32,
 	haste_timer:            f32,
 	haste_mult:             f32,
+	mend_timer:             f32,
+	mend_hps:               f32,
 	abilities:              [MAX_ABILITIES]Ability,
 	ability_count:          int,
 }

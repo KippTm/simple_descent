@@ -51,6 +51,12 @@ update_player :: proc(state: ^structs.Game_State, dt: f32, camera: rl.Camera2D) 
 	if state.player.reflect_timer > 0 {
 		state.player.reflect_timer = max(0, state.player.reflect_timer - dt)
 	}
+	if state.player.lunge_timer > 0 {
+		state.player.lunge_timer = max(0, state.player.lunge_timer - dt)
+	}
+	if state.player.nova_visual_timer > 0 {
+		state.player.nova_visual_timer = max(0, state.player.nova_visual_timer - dt)
+	}
 	if state.player.shield_timer > 0 {
 		state.player.shield_timer = max(0, state.player.shield_timer - dt)
 		if state.player.shield_timer <= 0 {
@@ -66,6 +72,11 @@ update_player :: proc(state: ^structs.Game_State, dt: f32, camera: rl.Camera2D) 
 			state.player.haste_mult = 1.0
 		}
 	}
+	if state.player.mend_timer > 0 {
+		heal_dt := min(dt, state.player.mend_timer)
+		state.player.hp = min(state.player.max_hp, state.player.hp + state.player.mend_hps * heal_dt)
+		state.player.mend_timer = max(0, state.player.mend_timer - dt)
+	}
 
 	// Tick ability cooldowns
 	for i in 0 ..< state.player.ability_count {
@@ -74,7 +85,7 @@ update_player :: proc(state: ^structs.Game_State, dt: f32, camera: rl.Camera2D) 
 		}
 	}
 
-	// 1. Player Movement (WASD / Arrow Keys, Haste boost, or Dash burst if active)
+	// 1. Player Movement (WASD / Arrow Keys, Haste boost, Lunge, or Dash burst if active)
 	move_input: [2]f32
 	if rl.IsKeyDown(.W) || rl.IsKeyDown(.UP)    do move_input.y -= 1
 	if rl.IsKeyDown(.S) || rl.IsKeyDown(.DOWN)  do move_input.y += 1
@@ -87,11 +98,17 @@ update_player :: proc(state: ^structs.Game_State, dt: f32, camera: rl.Camera2D) 
 
 	if state.player.dash_timer > 0 {
 		state.player.vel = state.player.dash_dir * state.player.dash_speed
+	} else if state.player.lunge_timer > 0 {
+		state.player.vel = state.player.lunge_dir * state.player.lunge_speed
 	} else {
 		speed_mult: f32 = state.player.haste_mult if state.player.haste_timer > 0 else 1.0
 		state.player.vel = move_input * (state.player.speed * speed_mult)
 	}
 	state.player.pos += state.player.vel * dt
+
+	if state.player.lunge_timer > 0 {
+		abilities.update_lunge_hitbox(state, dt)
+	}
 
 	// 2. Mouse / Trackpad Aiming ONLY
 	mouse_world := rl.GetScreenToWorld2D(rl.GetMousePosition(), camera)

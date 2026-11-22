@@ -44,36 +44,41 @@ cast_sweep :: proc(state: ^structs.Game_State, slot: int, aim_dir, move_input: [
 	p_pos := state.player.pos
 	cx, cy := structs.world_to_cell(p_pos)
 	cell_rad := i32(math.ceil((range + 16.0) / structs.GRID_CELL_SIZE))
+	state.query_stamp += 1
+	stamp := state.query_stamp
 
 	for dy in -cell_rad ..= cell_rad {
 		for dx in -cell_rad ..= cell_rad {
 			bucket := structs.hash_cell(cx + dx, cy + dy)
 			e_idx := state.grid.cell_head[bucket]
 			for e_idx != -1 {
-				e_pos := state.enemies[e_idx].pos
-				e_rad := state.enemies[e_idx].radius
-				to_enemy := e_pos - p_pos
-				dist_sq := linalg.length2(to_enemy)
-				max_reach := range + e_rad
+				if state.enemies[e_idx].last_query_stamp != stamp {
+					e_pos := state.enemies[e_idx].pos
+					e_rad := state.enemies[e_idx].radius
+					to_enemy := e_pos - p_pos
+					dist_sq := linalg.length2(to_enemy)
+					max_reach := range + e_rad
 
-				if dist_sq <= max_reach * max_reach {
-					hit := false
-					if dist_sq < 0.001 {
-						hit = true
-					} else {
-						dist := math.sqrt(dist_sq)
-						to_enemy_dir := to_enemy / dist
-						// Allow slightly wider angle when overlapping directly with player body
-						if linalg.dot(aim_dir, to_enemy_dir) >= cos_threshold || dist <= state.player.radius + e_rad + 6.0 {
+					if dist_sq <= max_reach * max_reach {
+						hit := false
+						if dist_sq < 0.001 {
 							hit = true
+						} else {
+							dist := math.sqrt(dist_sq)
+							to_enemy_dir := to_enemy / dist
+							// Allow slightly wider angle when overlapping directly with player body
+							if linalg.dot(aim_dir, to_enemy_dir) >= cos_threshold || dist <= state.player.radius + e_rad + 6.0 {
+								hit = true
+							}
 						}
-					}
 
-					if hit {
-						apply_ability_hit(state, slot, int(e_idx), damage)
-						if dist_sq > 0.001 {
-							push_dir := to_enemy / math.sqrt(dist_sq)
-							state.enemies[e_idx].pos += push_dir * SWEEP_KNOCKBACK
+						if hit {
+							state.enemies[e_idx].last_query_stamp = stamp
+							apply_ability_hit(state, slot, int(e_idx), damage)
+							if dist_sq > 0.001 {
+								push_dir := to_enemy / math.sqrt(dist_sq)
+								state.enemies[e_idx].pos += push_dir * SWEEP_KNOCKBACK
+							}
 						}
 					}
 				}

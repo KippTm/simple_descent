@@ -106,11 +106,13 @@ spawn_bolt_projectile :: proc(
 	state.projectile_count += 1
 
 	state.projectiles[idx] = structs.Projectile {
-		pos          = pos,
-		vel          = dir * speed,
-		radius       = radius,
-		damage       = damage,
-		lifetime     = lifetime,
-		ability_slot = ability_slot,
+		kind           = .Bolt,
+		pos            = pos,
+		vel            = dir * speed,
+		radius         = radius,
+		damage         = damage,
+		lifetime       = lifetime,
+		ability_slot   = ability_slot,
+		last_hit_enemy = -1,
 	}
 }

@@ -13,10 +13,15 @@ ABILITY_DEFS := [structs.Ability_Id]structs.Ability_Def {
 	.Sweep       = SWEEP_DEF,
 	.Stab        = STAB_DEF,
 	.Reflect     = REFLECT_DEF,
+	.Knife_Throw = KNIFE_THROW_DEF,
+	.Lunge       = LUNGE_DEF,
 	.Mana_Bolt   = MANA_BOLT_DEF,
 	.Mana_Shield = MANA_SHIELD_DEF,
+	.Mana_Nova   = MANA_NOVA_DEF,
+	.Mana_Orb    = MANA_ORB_DEF,
 	.Dash        = DASH_DEF,
 	.Haste       = HASTE_DEF,
+	.Mend        = MEND_DEF,
 }
 
 ABILITY_CAST_PROCS := [structs.Ability_Id]Ability_Cast_Proc {
@@ -24,20 +29,30 @@ ABILITY_CAST_PROCS := [structs.Ability_Id]Ability_Cast_Proc {
 	.Sweep       = cast_sweep,
 	.Stab        = cast_stab,
 	.Reflect     = cast_reflect,
+	.Knife_Throw = cast_knife_throw,
+	.Lunge       = cast_lunge,
 	.Mana_Bolt   = cast_mana_bolt,
 	.Mana_Shield = cast_mana_shield,
+	.Mana_Nova   = cast_mana_nova,
+	.Mana_Orb    = cast_mana_orb,
 	.Dash        = cast_dash,
 	.Haste       = cast_haste,
+	.Mend        = cast_mend,
 }
 
 SELECTABLE_ABILITIES := [?]structs.Ability_Id {
 	.Sweep,
 	.Stab,
 	.Reflect,
+	.Knife_Throw,
+	.Lunge,
 	.Mana_Bolt,
 	.Mana_Shield,
+	.Mana_Nova,
+	.Mana_Orb,
 	.Dash,
 	.Haste,
+	.Mend,
 }
 
 DEFAULT_LOADOUT := [structs.STARTING_ABILITY_COUNT]structs.Ability_Id {

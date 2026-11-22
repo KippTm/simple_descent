@@ -11,7 +11,7 @@ import "../structs"
 // -----------------------------------------------------------------------------
 
 init_game :: proc(state: ^structs.Game_State) {
-	init_default_loadout(state)
+	clear_loadout(state)
 	reset_run(state)
 	change_state(state, .Menu)
 }

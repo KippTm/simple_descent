@@ -50,23 +50,28 @@ cast_stab :: proc(state: ^structs.Game_State, slot: int, aim_dir, move_input: [2
 
 	min_x, min_y := structs.world_to_cell({min(p_pos.x, tip.x) - margin, min(p_pos.y, tip.y) - margin})
 	max_x, max_y := structs.world_to_cell({max(p_pos.x, tip.x) + margin, max(p_pos.y, tip.y) + margin})
+	state.query_stamp += 1
+	stamp := state.query_stamp
 
 	for cy in min_y ..= max_y {
 		for cx in min_x ..= max_x {
 			bucket := structs.hash_cell(cx, cy)
 			e_idx := state.grid.cell_head[bucket]
 			for e_idx != -1 {
-				e_pos := state.enemies[e_idx].pos
-				e_rad := state.enemies[e_idx].radius
-				to_e := e_pos - p_pos
-				proj := clamp(linalg.dot(to_e, dir), f32(0.0), reach)
-				closest := p_pos + dir * proj
-				dist_sq := linalg.length2(e_pos - closest)
-				hit_rad := f32(STAB_HALF_WIDTH) + e_rad
+				if state.enemies[e_idx].last_query_stamp != stamp {
+					e_pos := state.enemies[e_idx].pos
+					e_rad := state.enemies[e_idx].radius
+					to_e := e_pos - p_pos
+					proj := clamp(linalg.dot(to_e, dir), f32(0.0), reach)
+					closest := p_pos + dir * proj
+					dist_sq := linalg.length2(e_pos - closest)
+					hit_rad := f32(STAB_HALF_WIDTH) + e_rad
 
-				if dist_sq <= hit_rad * hit_rad {
-					apply_ability_hit(state, slot, int(e_idx), damage)
-					state.enemies[e_idx].pos += dir * STAB_KNOCKBACK
+					if dist_sq <= hit_rad * hit_rad {
+						state.enemies[e_idx].last_query_stamp = stamp
+						apply_ability_hit(state, slot, int(e_idx), damage)
+						state.enemies[e_idx].pos += dir * STAB_KNOCKBACK
+					}
 				}
 
 				e_idx = state.grid.next_in_cell[e_idx]

@@ -45,6 +45,7 @@ Game_State :: struct {
 	projectile_count:       int,
 
 	grid:                   Spatial_Grid,
+	query_stamp:            u32,
 
 	// Loop & Teleporter progression
 	run_timer:              f32,
