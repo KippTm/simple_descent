@@ -83,6 +83,11 @@ update_playing :: proc(state: ^structs.Game_State, dt: f32, camera: rl.Camera2D)
 		return
 	}
 
+	// Check if any ability hit a milestone level (3, 6, 9, ...) to pick its upgrade focus
+	if check_pending_upgrade_focus(state) {
+		return
+	}
+
 	// 5. Wave Progression: when wave is cleared, spawn the next wave after a brief breather
 	if state.enemy_count == 0 {
 		state.spawn_timer += dt

@@ -46,17 +46,20 @@ DEFAULT_LOADOUT := [structs.STARTING_ABILITY_COUNT]structs.Ability_Id {
 	.Dash,
 }
 
-// All abilities start unspecialized at level 1.
+// All abilities start unspecialized at level 1 with their default upgrade focus.
 make_ability :: proc(id: structs.Ability_Id) -> structs.Ability {
 	def := ABILITY_DEFS[id]
 	return structs.Ability {
-		id            = id,
-		level         = 1,
-		xp            = 0,
-		spec_type     = .None,
-		spec_tier     = 0,
-		cooldown      = 0,
-		cooldown_time = def.cooldown_time,
+		id                   = id,
+		level                = 1,
+		xp                   = 0,
+		spec_type            = .None,
+		spec_tier            = 0,
+		cooldown             = 0,
+		cooldown_time        = def.cooldown_time,
+		upgrade_focus        = def.default_focus,
+		focus_ranks          = {},
+		pending_focus_choice = false,
 	}
 }
 

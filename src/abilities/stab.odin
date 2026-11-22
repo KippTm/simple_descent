@@ -9,25 +9,29 @@ import "../structs"
 // -----------------------------------------------------------------------------
 
 STAB_DEF :: structs.Ability_Def {
-	id            = .Stab,
-	name          = "Stab",
-	short_desc    = "Deep, narrow straight thrust with high reach.",
-	category      = .Physical,
-	cooldown_time = 0.55,
+	id              = .Stab,
+	name            = "Stab",
+	short_desc      = "Deep, narrow straight thrust with high reach.",
+	category        = .Physical,
+	cooldown_time   = 0.55,
+	default_focus   = .Damage,
+	allowed_focuses = {.Damage, .Range},
 }
 
 STAB_BASE_DAMAGE :: 18.0
-STAB_LEVEL_SCALE :: 0.15
-STAB_RANGE       :: 112.0
+STAB_DAMAGE_STEP :: 0.15
+STAB_RANGE       :: 86.0
+STAB_RANGE_STEP  :: 0.12
 STAB_HALF_WIDTH  :: 14.0
 STAB_KNOCKBACK   :: 22.0
 
 cast_stab :: proc(state: ^structs.Game_State, slot: int, aim_dir, move_input: [2]f32) {
 	_ = move_input
 	ability := state.player.abilities[slot]
-	level_mult := 1.0 + STAB_LEVEL_SCALE * f32(ability.level - 1)
-	damage := STAB_BASE_DAMAGE * level_mult
-	reach := f32(STAB_RANGE)
+	dmg_mult := 1.0 + f32(STAB_DAMAGE_STEP) * f32(ability.focus_ranks[.Damage])
+	range_mult := 1.0 + f32(STAB_RANGE_STEP) * f32(ability.focus_ranks[.Range])
+	damage := STAB_BASE_DAMAGE * dmg_mult
+	reach := f32(STAB_RANGE) * range_mult
 
 	dir := aim_dir
 	if linalg.length2(dir) > 0.0001 {

@@ -29,6 +29,10 @@ render_game :: proc(state: ^structs.Game_State, camera: rl.Camera2D) {
 		render_world(state, camera)
 		render_hud(state)
 		render_pause(state)
+	case .Upgrade_Select:
+		render_world(state, camera)
+		render_hud(state)
+		render_upgrade_select(state)
 	}
 }
 
@@ -398,10 +402,116 @@ render_skill_bar :: proc(player: ^structs.Player) {
 		rl.DrawRectangle(sx + slot_size - lvl_w - 6, sy + slot_size - 21, lvl_w + 4, 13, {12, 12, 18, 220})
 		rl.DrawText(lvl_str, sx + slot_size - lvl_w - 4, sy + slot_size - 20, 12, rl.RAYWHITE)
 
-		// Slot key number at top-left
+		// Slot key number at top-left, current upgrade focus tag at top-right
 		key_str := fmt.ctprintf("%d", i + 1)
 		rl.DrawText(key_str, sx + 4, sy + 3, 12, {170, 175, 195, 255})
+
+		focus_short := upgrade_focus_short(ability.upgrade_focus)
+		fw := rl.MeasureText(focus_short, 10)
+		rl.DrawText(focus_short, sx + slot_size - fw - 4, sy + 4, 10, accent)
 	}
+}
+
+upgrade_focus_short :: proc(f: structs.Upgrade_Focus) -> cstring {
+	switch f {
+	case .Damage:
+		return "DMG"
+	case .Range:
+		return "RNG"
+	case .Duration:
+		return "DUR"
+	case .Projectiles:
+		return "PRJ"
+	}
+	return ""
+}
+
+upgrade_focus_name :: proc(f: structs.Upgrade_Focus) -> cstring {
+	switch f {
+	case .Damage:
+		return "Damage / Power"
+	case .Range:
+		return "Range / Speed"
+	case .Duration:
+		return "Duration"
+	case .Projectiles:
+		return "Projectiles"
+	}
+	return ""
+}
+
+upgrade_focus_desc :: proc(id: structs.Ability_Id, f: structs.Upgrade_Focus) -> cstring {
+	switch f {
+	case .Damage:
+		if id == .Mana_Shield do return "+15% shield absorb HP"
+		if id == .Reflect do return "+15% reflected damage"
+		return "+15% ability damage"
+	case .Range:
+		if id == .Dash do return "+10% dash speed & reach"
+		if id == .Haste do return "+8% movement speed"
+		if id == .Mana_Bolt do return "+15% range & +8% speed"
+		return "+12% attack reach"
+	case .Duration:
+		if id == .Reflect do return "+0.04s parry window"
+		if id == .Mana_Shield do return "+0.45s shield duration"
+		if id == .Dash do return "+0.03s invulnerability"
+		if id == .Haste do return "+0.50s haste duration"
+		return "Longer effect duration"
+	case .Projectiles:
+		return "+1 extra projectile"
+	}
+	return ""
+}
+
+render_upgrade_select :: proc(state: ^structs.Game_State) {
+	// Dark translucent backdrop over paused combat
+	rl.DrawRectangle(0, 0, structs.WINDOW_WIDTH, structs.WINDOW_HEIGHT, {8, 8, 14, 195})
+
+	slot := state.upgrade_select_slot
+	if slot < 0 || slot >= state.player.ability_count do return
+
+	ability := state.player.abilities[slot]
+	def := abilities.ABILITY_DEFS[ability.id]
+	accent := category_color(def.category)
+
+	draw_centered_text(
+		fmt.ctprintf("%s REACHED LEVEL %d!", def.name, ability.level),
+		160,
+		36,
+		accent,
+	)
+	draw_centered_text(
+		"Choose what future level-ups will improve:",
+		212,
+		20,
+		{205, 212, 225, 255},
+	)
+
+	options, count := states.get_ability_focus_options(ability.id)
+	for i in 0 ..< count {
+		f := options[i]
+		rect := states.upgrade_option_rect(i, count)
+		is_cursor := state.upgrade_select_cursor == i
+		is_current := ability.upgrade_focus == f
+
+		bg := rl.Color{32, 38, 54, 250} if is_cursor else rl.Color{22, 24, 34, 240}
+		border := rl.Color{255, 230, 110, 255} if is_cursor else (accent if is_current else rl.Color{70, 76, 98, 255})
+		rl.DrawRectangleRec(rect, bg)
+		rl.DrawRectangleLinesEx(rect, 3.0 if is_cursor else 1.5, border)
+
+		rx := i32(rect.x)
+		ry := i32(rect.y)
+		rl.DrawText(fmt.ctprintf("[%d] %s", i + 1, upgrade_focus_name(f)), rx + 14, ry + 16, 18, rl.RAYWHITE)
+		rl.DrawText(upgrade_focus_desc(ability.id, f), rx + 14, ry + 54, 14, {185, 195, 215, 255})
+		rl.DrawText(fmt.ctprintf("Current Ranks: %d", ability.focus_ranks[f]), rx + 14, ry + 94, 13, accent)
+	}
+
+	draw_centered_text(
+		"A/D or Arrows = Select | 1-4 / ENTER / Click = Confirm",
+		structs.WINDOW_HEIGHT - 56,
+		18,
+		{150, 155, 175, 255},
+	)
 }
 
 draw_centered_text :: proc(text: cstring, y: i32, font_size: i32, color: rl.Color) {

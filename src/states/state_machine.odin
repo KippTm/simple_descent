@@ -29,5 +29,7 @@ update_state_machine :: proc(state: ^structs.Game_State, dt: f32, camera: rl.Cam
 		update_playing(state, dt, camera)
 	case .Paused:
 		update_pause(state)
+	case .Upgrade_Select:
+		update_upgrade_select(state)
 	}
 }

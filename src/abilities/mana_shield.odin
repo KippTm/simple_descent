@@ -7,28 +7,32 @@ import "../structs"
 // -----------------------------------------------------------------------------
 
 MANA_SHIELD_DEF :: structs.Ability_Def {
-	id            = .Mana_Shield,
-	name          = "Mana Shield",
-	short_desc    = "Barrier that absorbs damage for a short duration.",
-	category      = .Magical,
-	cooldown_time = 5.0,
+	id              = .Mana_Shield,
+	name            = "Mana Shield",
+	short_desc      = "Barrier that absorbs damage for a short duration.",
+	category        = .Magical,
+	cooldown_time   = 5.0,
+	default_focus   = .Duration,
+	allowed_focuses = {.Damage, .Duration},
 }
 
-MANA_SHIELD_BASE_HP       :: 25.0
-MANA_SHIELD_LEVEL_SCALE   :: 0.18
-MANA_SHIELD_DURATION      :: 4.0
+MANA_SHIELD_BASE_HP       :: 12.0
+MANA_SHIELD_HP_STEP       :: 0.15
+MANA_SHIELD_DURATION      :: 1.75
+MANA_SHIELD_DURATION_STEP :: 0.45
 MANA_SHIELD_FREE_XP_LEVEL :: 2 // Levels 1-2 gain small XP on cast; level 3+ requires absorbing damage
 
 cast_mana_shield :: proc(state: ^structs.Game_State, slot: int, aim_dir, move_input: [2]f32) {
 	_ = aim_dir
 	_ = move_input
 	ability := &state.player.abilities[slot]
-	level_mult := 1.0 + f32(MANA_SHIELD_LEVEL_SCALE) * f32(ability.level - 1)
-	shield_amount := f32(MANA_SHIELD_BASE_HP) * level_mult
+	hp_mult := 1.0 + f32(MANA_SHIELD_HP_STEP) * f32(ability.focus_ranks[.Damage])
+	shield_amount := f32(MANA_SHIELD_BASE_HP) * hp_mult
+	duration := f32(MANA_SHIELD_DURATION) + f32(MANA_SHIELD_DURATION_STEP) * f32(ability.focus_ranks[.Duration])
 
 	state.player.shield_hp = shield_amount
 	state.player.shield_max_hp = shield_amount
-	state.player.shield_timer = MANA_SHIELD_DURATION
+	state.player.shield_timer = duration
 	state.player.shield_slot = slot
 
 	// Early levels grant a small amount of XP on cast; after a few levels it only gains XP on absorption

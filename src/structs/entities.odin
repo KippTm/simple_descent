@@ -11,16 +11,17 @@ Enemy_Kind :: enum u8 {
 }
 
 Enemy :: struct {
-	pos:          [2]f32,
-	vel:          [2]f32,
-	hp:           f32,
-	max_hp:       f32,
-	speed:        f32,
-	radius:       f32,
-	kind:         Enemy_Kind,
-	status_flags: Status_Flags,
-	burn_timer:   f32,
-	slow_timer:   f32,
+	pos:                   [2]f32,
+	vel:                   [2]f32,
+	hp:                    f32,
+	max_hp:                f32,
+	speed:                 f32,
+	radius:                f32,
+	kind:                  Enemy_Kind,
+	status_flags:          Status_Flags,
+	burn_timer:            f32,
+	slow_timer:            f32,
+	last_hit_ability_slot: int,
 }
 
 Projectile :: struct {

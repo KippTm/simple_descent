@@ -31,6 +31,8 @@ Game_State :: struct {
 	selected_loadout:       [STARTING_ABILITY_COUNT]Ability_Id,
 	selected_loadout_count: int,
 	loadout_cursor:         int,
+	upgrade_select_slot:    int,
+	upgrade_select_cursor:  int,
 	should_quit:            bool,
 
 	player:                 Player,

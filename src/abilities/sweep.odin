@@ -9,24 +9,31 @@ import "../structs"
 // -----------------------------------------------------------------------------
 
 SWEEP_DEF :: structs.Ability_Def {
-	id            = .Sweep,
-	name          = "Sweep",
-	short_desc    = "Arced melee slash that knocks enemies back.",
-	category      = .Physical,
-	cooldown_time = 0.45,
+	id              = .Sweep,
+	name            = "Sweep",
+	short_desc      = "Arced melee slash that knocks enemies back.",
+	category        = .Physical,
+	cooldown_time   = 0.45,
+	default_focus   = .Damage,
+	allowed_focuses = {.Damage, .Range},
 }
 
 SWEEP_BASE_DAMAGE :: 14.0
-SWEEP_LEVEL_SCALE :: 0.15
+SWEEP_DAMAGE_STEP :: 0.15
+SWEEP_RANGE_STEP  :: 0.12
+SWEEP_ARC_STEP    :: 0.06
 SWEEP_KNOCKBACK   :: 18.0
 
 cast_sweep :: proc(state: ^structs.Game_State, slot: int, aim_dir, move_input: [2]f32) {
 	_ = move_input
 	ability := state.player.abilities[slot]
-	level_mult := 1.0 + SWEEP_LEVEL_SCALE * f32(ability.level - 1)
-	damage := SWEEP_BASE_DAMAGE * level_mult
-	range := f32(structs.MELEE_RANGE)
-	half_angle := f32(structs.MELEE_HALF_ANGLE)
+	dmg_mult := 1.0 + f32(SWEEP_DAMAGE_STEP) * f32(ability.focus_ranks[.Damage])
+	range_mult := 1.0 + f32(SWEEP_RANGE_STEP) * f32(ability.focus_ranks[.Range])
+	arc_mult := 1.0 + f32(SWEEP_ARC_STEP) * f32(ability.focus_ranks[.Range])
+
+	damage := SWEEP_BASE_DAMAGE * dmg_mult
+	range := f32(structs.MELEE_RANGE) * range_mult
+	half_angle := min(f32(structs.MELEE_HALF_ANGLE) * arc_mult, f32(math.PI) * 0.9)
 	cos_threshold := math.cos(half_angle)
 
 	state.player.melee_swing_dir = aim_dir

@@ -17,14 +17,15 @@ spawn_enemy :: proc(state: ^structs.Game_State, pos: [2]f32, kind: structs.Enemy
 	state.enemy_count += 1
 
 	state.enemies[idx] = structs.Enemy {
-		pos          = pos,
-		vel          = {0, 0},
-		hp           = 40.0,
-		max_hp       = 40.0,
-		speed        = 92.0 + rand.float32_range(-12.0, 12.0),
-		radius       = 10.0,
-		kind         = kind,
-		status_flags = {},
+		pos                   = pos,
+		vel                   = {0, 0},
+		hp                    = 40.0,
+		max_hp                = 40.0,
+		speed                 = 92.0 + rand.float32_range(-12.0, 12.0),
+		radius                = 10.0,
+		kind                  = kind,
+		status_flags          = {},
+		last_hit_ability_slot = -1,
 	}
 }
 
@@ -43,6 +44,11 @@ update_enemies :: proc(state: ^structs.Game_State, dt: f32) {
 
 	for i := state.enemy_count - 1; i >= 0; i -= 1 {
 		if state.enemies[i].hp <= 0 {
+			killer_slot := state.enemies[i].last_hit_ability_slot
+			if killer_slot >= 0 && killer_slot < state.player.ability_count {
+				xp_reward := abilities.enemy_xp_reward(state.enemies[i].kind)
+				abilities.grant_ability_xp(&state.player.abilities[killer_slot], xp_reward)
+			}
 			remove_enemy(state, i)
 			state.kill_count += 1
 			continue

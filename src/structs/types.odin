@@ -11,6 +11,7 @@ MAX_ENEMIES            :: 16384
 MAX_PROJECTILES        :: 4096
 MAX_ABILITIES          :: 6
 STARTING_ABILITY_COUNT :: 3
+UPGRADE_FOCUS_INTERVAL :: 3 // Choose/change upgrade focus every 3rd level (3, 6, 9, ...)
 
 // Melee Sweep, Stab & Dash Configuration
 MELEE_RANGE            :: 68.0
@@ -35,6 +36,7 @@ State_Kind :: enum u8 {
 	Loadout_Select,
 	Playing,
 	Paused,
+	Upgrade_Select,
 }
 
 // -----------------------------------------------------------------------------
@@ -48,6 +50,15 @@ Ability_Category :: enum u8 {
 	Utility,
 }
 
+Upgrade_Focus :: enum u8 {
+	Damage,
+	Range,
+	Duration,
+	Projectiles,
+}
+
+Upgrade_Focus_Set :: distinct bit_set[Upgrade_Focus; u8]
+
 Ability_Id :: enum u8 {
 	None,
 	Sweep,
@@ -60,11 +71,13 @@ Ability_Id :: enum u8 {
 }
 
 Ability_Def :: struct {
-	id:            Ability_Id,
-	name:          cstring,
-	short_desc:    cstring,
-	category:      Ability_Category,
-	cooldown_time: f32,
+	id:              Ability_Id,
+	name:            cstring,
+	short_desc:      cstring,
+	category:        Ability_Category,
+	cooldown_time:   f32,
+	default_focus:   Upgrade_Focus,
+	allowed_focuses: Upgrade_Focus_Set,
 }
 
 Spec_Type :: enum u8 {
@@ -85,11 +98,14 @@ Status_Effect :: enum u8 {
 Status_Flags :: distinct bit_set[Status_Effect; u8]
 
 Ability :: struct {
-	id:            Ability_Id,
-	level:         int,
-	xp:            f32,
-	spec_type:     Spec_Type,
-	spec_tier:     int,
-	cooldown:      f32,
-	cooldown_time: f32,
+	id:                   Ability_Id,
+	level:                int,
+	xp:                   f32,
+	spec_type:            Spec_Type,
+	spec_tier:            int,
+	cooldown:             f32,
+	cooldown_time:        f32,
+	upgrade_focus:        Upgrade_Focus,
+	focus_ranks:          [Upgrade_Focus]int,
+	pending_focus_choice: bool,
 }

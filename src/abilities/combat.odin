@@ -7,16 +7,38 @@ import "../structs"
 // Shared Combat, Usage-Based Leveling ("Muscle Memory") & Specializations
 // -----------------------------------------------------------------------------
 
+// Gentle exponential scaling using Euler's number: 20 * e^(0.22 * (level - 1))
+// Lv 1->2: 20.0, Lv 2->3: ~24.9, Lv 3->4: ~31.1, Lv 5->6: ~48.2, Lv 10->11: ~144.9
+XP_BASE     :: 20.0
+XP_EXPONENT :: 0.22
+
 xp_for_next_level :: #force_inline proc(level: int) -> f32 {
-	return 10.0 * math.pow(f32(level), 1.35)
+	return XP_BASE * math.exp(f32(XP_EXPONENT) * f32(max(level - 1, 0)))
+}
+
+enemy_xp_reward :: proc(kind: structs.Enemy_Kind) -> f32 {
+	switch kind {
+	case .Basic_Chaser:
+		return 5.0
+	case .Ranged_Shooter:
+		return 9.0
+	case .Boss:
+		return 50.0
+	}
+	return 5.0
 }
 
 grant_ability_xp :: proc(ability: ^structs.Ability, amount: f32) {
+	if amount <= 0 do return
 	ability.xp += amount
 	req := xp_for_next_level(ability.level)
 	for ability.xp >= req {
 		ability.xp -= req
 		ability.level += 1
+		ability.focus_ranks[ability.upgrade_focus] += 1
+		if ability.level % structs.UPGRADE_FOCUS_INTERVAL == 0 {
+			ability.pending_focus_choice = true
+		}
 		req = xp_for_next_level(ability.level)
 	}
 }
@@ -48,8 +70,8 @@ grant_specialization :: proc(ability: ^structs.Ability, spec: structs.Spec_Type,
 apply_ability_hit :: proc(state: ^structs.Game_State, ability_slot: int, enemy_idx: int, base_damage: f32) {
 	ability := &state.player.abilities[ability_slot]
 
-	// Grant muscle-memory XP on successful hit
-	grant_ability_xp(ability, 2.5)
+	// Remember which ability last damaged this enemy so kill XP is awarded on death
+	state.enemies[enemy_idx].last_hit_ability_slot = ability_slot
 
 	// Scale specialization magnitude by both tier and current ability level
 	spec_scale := f32(ability.spec_tier) * (1.0 + 0.1 * f32(ability.level))
